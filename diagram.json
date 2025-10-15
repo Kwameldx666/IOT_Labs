@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "author": "Sologan Artemios",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-arduino-mega", "id": "mega", "top": 10.2, "left": -13.2, "attrs": {} },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": -5.65,
+      "left": 182.4,
+      "attrs": { "value": "240" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led1",
+      "top": -30,
+      "left": 256.2,
+      "rotate": 90,
+      "attrs": { "color": "red" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r2",
+      "top": -34.45,
+      "left": 182.4,
+      "attrs": { "value": "240" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led2",
+      "top": -58.8,
+      "left": 256.2,
+      "rotate": 90,
+      "attrs": { "color": "green" }
+    },
+    {
+      "type": "wokwi-lcd1602",
+      "id": "lcd1",
+      "top": -224,
+      "left": 178.4,
+      "attrs": { "pins": "i2c" }
+    },
+    { "type": "wokwi-membrane-keypad", "id": "keypad1", "top": -242, "left": 476, "attrs": {} }
+  ],
+  "connections": [
+    [ "mega:7", "r1:1", "green", [ "v0" ] ],
+    [ "r1:2", "led1:A", "green", [ "h18", "v-28.8" ] ],
+    [ "mega:8", "r2:1", "green", [ "v0" ] ],
+    [ "r2:2", "led2:A", "green", [ "h8.4", "v-12" ] ],
+    [ "led2:C", "mega:GND.1", "black", [ "h0" ] ],
+    [ "led1:C", "mega:GND.1", "black", [ "h-19.2", "v-28.4", "h-134.2" ] ],
+    [ "lcd1:GND", "mega:GND.1", "black", [ "h0" ] ],
+    [ "lcd1:VCC", "mega:5V.1", "red", [ "h-67.2", "v134.5", "h232.6" ] ],
+    [ "lcd1:SDA", "mega:20", "green", [ "h-57.6", "v115.4", "h192" ] ],
+    [ "lcd1:SCL", "mega:21", "green", [ "h-48", "v96.3", "h192" ] ],
+    [ "keypad1:C4", "mega:53", "green", [ "v0" ] ],
+    [ "keypad1:C3", "mega:51", "green", [ "v0" ] ],
+    [ "keypad1:C2", "mega:49", "green", [ "v0" ] ],
+    [ "keypad1:C1", "mega:47", "green", [ "v0" ] ],
+    [ "keypad1:R4", "mega:45", "green", [ "v0" ] ],
+    [ "keypad1:R3", "mega:43", "green", [ "v0" ] ],
+    [ "keypad1:R2", "mega:41", "green", [ "v0" ] ],
+    [ "keypad1:R1", "mega:39", "green", [ "v0" ] ]
+  ],
+  "dependencies": {}
+}
