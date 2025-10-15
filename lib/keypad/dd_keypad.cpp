@@ -39,5 +39,5 @@ Keypad keypad = Keypad(makeKeymap(kKeys), kRowPins, kColPins, kRows, kCols);
  */
 char ReadKeypad() {
   // Wrap the library call so the rest of the project has a single entrypoint.
-    char key = keypad.getKey();
+  return keypad.getKey();
 }

@@ -1,67 +1,65 @@
-# Лабораторная работа 2.1 — Последовательные операционные системы
+# Lab 2.1 ? Sequential Operating System Demo
 
-## Обзор
-Реализована последовательная (non-preemptive) система с тремя задачами и IDLE-процедурой отчётности. Задачи планируются статически, используя индивидуальные периоды и смещения. Общий модуль lab2_1 демонстрирует модель provider/consumer через разделяемый блок состояния, который обслуживается задачами и считывается IDLE-потоком с применением STDIO (printf).
+## Overview
+The project implements a sequential (non-preemptive) task system for Arduino Mega. Three provider tasks share a common `SharedState` structure and an IDLE consumer prints periodic reports with `printf`. Each task has its own fixed period and offset to demonstrate time-triggered scheduling.
 
-## Структура задач
-| Задача | Период (мс) | Offset (мс) | Роль | Производимые данные |
-|-------|-------------|-------------|------|--------------------|
-| Task 1 Button+LED | 25 | 0 | Обрабатывает нажатие кнопки BUTTON_TOGGLE_PIN, переключая основной LED | mainLedOn, lastMainToggleMs, mainToggleCount, linkSuppressed |
-| Task 2 Blink | 40 | 10 | Управляет миганием зелёного LED в зависимости от состояния Task 1 и окна времени Task 3 | linkLedOn, linkCycleCount, linkOnAccumMs |
-| Task 3 State | 35 | 20 | Корректирует длительность свечения зелёного LED по кнопкам BUTTON_INC_PIN/BUTTON_DEC_PIN | linkWindowUnits, linkOnTargetMs, incAdjustCount, decAdjustCount |
-| IDLE (unIdle) | 1000 | — | Потребитель информации, формирует отчёт по Serial (stdout) | — |
+## Task Set
+| Task | Period (ms) | Offset (ms) | Responsibility | Produced fields |
+|------|-------------|-------------|----------------|-----------------|
+| Button+LED | 25 | 0 | Reads button on pin 7, toggles main LED on pin 12 | `mainLedOn`, `mainToggleCount`, `blinkSuppressed` |
+| Blink | 40 | 10 | Drives blinking LED on pin 10 when main LED is off | `blinkLedOn`, `blinkCycleCount`, `blinkOnAccumMs` |
+| State | 35 | 20 | Adjusts blink-on window via buttons on pins 6/5 | `blinkWindowUnits`, `blinkOnTargetMs`, `incAdjustCount`, `decAdjustCount` |
+| IDLE | 1000 | ? | Prints aggregated state via stdout/Serial | ? |
 
-Отсутствие прерываний и блокирующих вызовов внутри задач гарантирует последовательное выполнение.
+The scheduler walks the table sequentially inside `lab2SchedulerRunOnce()`, executing each task once per iteration when its release time arrives. No task performs blocking delays.
 
-## Механизм provider/consumer
-- *Поставщики*: задачи 1–3 обновляют поля структуры SharedState без длительной блокировки.
-- *Потребитель*: IDLE-процедура (unIdle) раз в секунду читает состояние и формирует строку отчёта: printf("[Lab2.1] ...").
-- Глобальная структура gShared служит буфером сообщений. Задачи заполняют только свою часть, IDLE читает агрегированные данные.
+## Provider / Consumer Flow
+- Providers (Button+LED, Blink, State) update selected fields in `SharedState` with minimal processing time.
+- Consumer (IDLE) reads the same structure every 1000 ms and reports the current snapshot: `printf("[Lab2.1] ...")`.
+- The shared structure is single-writer per field, so no mutexes are required in this sequential context.
 
-## Синхронизация
-- Логика нажатий защищена программной антидребезговой фильтрацией (BUTTON_DEBOUNCE_MS).
-- Управление зелёным LED выполняется только в Task 2, а Task 1 приоритетно отключает его при включении основного света, предотвращая гонки.
-- Значение linkOnTargetMs пересчитывается при каждом изменении окна времени.
+## Synchronisation Details
+- Software debounce (`BUTTON_DEBOUNCE_MS`) prevents multiple toggles per press.
+- Blink task owns the green LED; Button+LED task enforces suppression when the main LED is active, guaranteeing consistent light states.
+- State task recalculates `blinkOnTargetMs` after each adjustment to keep timings coherent.
 
-## Аппаратная схема
-- LED_PIN (13) — основной LED (встроенный на Arduino Mega).
-- GREEN_LED_PIN (8) — зелёный индикатор мигания (через резистор 220 ? на землю).
-- RED_LED_PIN (7) — используется Lab 1.2; в Lab 2.1 может оставаться свободным.
-- Кнопки (pull-up):
-  - BUTTON_TOGGLE_PIN (11) — переключение основного LED.
-  - BUTTON_INC_PIN (10) — увеличение окна свечения зелёного LED.
-  - BUTTON_DEC_PIN (9) — уменьшение окна.
-Каждая кнопка подключается между соответствующим пином и землёй; внутренний INPUT_PULLUP активирован в коде. Для снижения наводок рекомендуется использовать конденсатор 100 нФ параллельно кнопке.
+## Hardware / Wokwi Mapping
+- `LED_PIN` (Mega pin 12, blue LED via 220 ? resistor) ? main light, toggled by Task 1.
+- `GREEN_LED_PIN` (pin 10, green LED via 220 ? resistor) ? blink light controlled by Task 2.
+- `RED_LED_PIN` (pin 4) ? kept for Lab 1.2 compatibility; unused here.
+- `BUTTON_TOGGLE_PIN` (pin 7) ? toggle main LED.
+- `BUTTON_INC_PIN` (pin 6) ? increase blink-on window.
+- `BUTTON_DEC_PIN` (pin 5) ? decrease blink-on window.
+All buttons connect to ground with the internal pull-up enabled.
 
-## Последовательность исполнения
-`
+## Execution Order
+```
 loop()
- +- Task 1: Button+LED
- +- Task 2: Blink
- +- Task 3: State
- L- IDLE: printf отчёт
-`
-Порядок фиксирован и повторяется, задержки отсутствуют, пока задачи не выполняют операций delay. В Task 2 применяется счёт времени при помощи millis() для формирования окна свечения.
+  ?? taskButtonAndLed()
+  ?? taskBlinkController()
+  ?? taskStateVariable()
+  ?? taskIdleReport()
+```
 
-## Использование
-1. Убедитесь, что в src/main.cpp активировано определение #define LAB2_1 и закомментированы другие лабораторные работы.
-2. Подключите кнопки и светодиоды согласно разделу «Аппаратная схема».
-3. Соберите и загрузите проект через PlatformIO (pio run -t upload).
-4. Откройте Serial Monitor на скорости 9600 бод и наблюдайте отчёты IDLE-задачи каждые ~1000 мс.
+## Usage
+1. Ensure `#define LAB2_1` is active in `src/main.cpp`.
+2. Wire the circuit as described (matches the supplied Wokwi JSON).
+3. Build and upload with PlatformIO (`pio run -t upload`).
+4. Open the Serial Monitor at 9600 baud to observe IDLE reports every ~1 s.
 
-### Пример отчёта
-`
+Example output:
+```
 [Lab2.1] main:OFF blink:ON win:4 on:480ms off:220ms toggles:2 cycles:5 inc:1 dec:0 on_acc:960ms
-`
+```
 
-## Проверка и валидация
-- При первом запуске основной LED выключен, зелёный начинает мигать через 220 мс после старта.
-- Нажатие кнопки на пине 11 включает основной LED, останавливая мигание зелёного светодиода до повторного нажатия.
-- Кнопки на пинах 10/9 изменяют длительность свечения зелёного LED в пределах 1–10 шагов (каждый шаг по 120 мс).
-- IDLE-задача формирует отчёт, где отражены все счётчики и текущие состояния.
+## Verification Steps
+- Start: main LED is OFF, blink LED begins flashing after its first off interval.
+- Press pin 7 button: main LED turns ON, blink LED halts; press again to resume blinking.
+- Press pin 6: blink ON time increases (up to 10 units, 120 ms each).
+- Press pin 5: blink ON time decreases (down to 1 unit).
+- Observe Serial logs updating counters and durations accordingly.
 
-## Возможные расширения
-- Добавление LCD-отчётности через имеющийся модуль own_stdio.
-- Динамическая настройка периодов задач.
-- Экспорт данных в JSON через Serial для логирования.
-
+## Possible Extensions
+- Mirror the IDLE summary on the LCD using the existing `own_stdio` module.
+- Allow runtime reconfiguration of task periods.
+- Stream JSON telemetry for external logging tools.

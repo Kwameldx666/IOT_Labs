@@ -40,15 +40,15 @@
 
 
 // LED pin assignments
-#define LED_PIN 13
-#define GREEN_LED_PIN 8
-#define RED_LED_PIN 7
+#define LED_PIN 12
+#define GREEN_LED_PIN 10
+#define RED_LED_PIN 4
 
 // Button inputs
 #define BUTTON_PIN 11
-#define BUTTON_TOGGLE_PIN BUTTON_PIN
-#define BUTTON_INC_PIN 10
-#define BUTTON_DEC_PIN 9
+#define BUTTON_TOGGLE_PIN 7
+#define BUTTON_INC_PIN 6
+#define BUTTON_DEC_PIN 5
 #define BUTTON_DEBOUNCE_MS 35
 
 #endif
