@@ -3,21 +3,21 @@
  * @brief Lab 3.2 - Signal Conditioning with Digital Filters (FreeRTOS)
  * 
  * Features:
- * - Analog sensor sampling (potentiometer on A0)
- * - Salt & Pepper filter for impulse noise removal
- * - Weighted moving average filter for smoothing
- * - ADC → Voltage → Physical parameter conversion
+ * - Analog sensor sampling (two sensors on A0 and A1)
+ * - Salt & Pepper filter library for impulse noise removal
+ * - Weighted average filter library for smoothing
+ * - SignalConverter library for ADC → Voltage → Physical conversion
  * - Saturation (value clamping)
- * - FreeRTOS tasks with precise timing
- * - STDIO reporting via printf
- * - Parallel LCD display (optional)
+ * - FreeRTOS tasks with precise timing using vTaskDelayUntil()
+ * - STDIO reporting via printf with detailed pipeline visualization
+ * - LCD display with signal processing results
  * 
- * Filters:
- * 1. Salt & Pepper: Median filter (window=5) to remove spikes
- * 2. Weighted Average: Recent samples weighted more (window=5)
+ * Signal Processing Pipeline:
+ * Raw ADC → Salt&Pepper → Weighted Avg → ADC→Voltage → Voltage→Physical → Saturation
  * 
- * Conversion chain:
- * ADC (0-1023) → Voltage (0-5V) → Physical (e.g. temperature 0-100°C)
+ * Architecture:
+ * - Task 1: Sampling & Conditioning (100ms period, high priority)
+ * - Task 2: Status Reporting (500ms period, low priority, 50ms offset)
  */
 
 #include "lab3_2.hpp"
@@ -29,6 +29,9 @@
 
 #include "config.h"
 #include "dd_serial.hpp"
+#include "salt_pepper_filter.hpp"
+#include "weighted_average_filter.hpp"
+#include "signal_converter.hpp"
 
 // Simple LCD 1602 driver (4-bit mode)
 // RS=7, E=6, D4=5, D5=4, D6=3, D7=2
@@ -139,155 +142,102 @@ void lcdPrintInt(int value) {
   lcdPrint(buf);
 }
 
-// Ultrasonic HC-SR04 (optional second sensor)
-#define ULTRASONIC_TRIG_PIN 8
-#define ULTRASONIC_ECHO_PIN 9
-
-// ============================================================================
-// Configuration
-// ============================================================================
-
-#define LAB32_SENSOR_PIN A0             // Analog sensor (potentiometer in Wokwi)
-#define LAB32_SALT_PEPPER_WINDOW 5      // Salt & Pepper filter window
-#define LAB32_WEIGHTED_AVG_WINDOW 5     // Weighted average window
-#define LAB32_SAMPLING_RATE_MS 100      // Sample every 100ms
-#define LAB32_REPORT_RATE_MS 500        // Report every 500ms
-
-// Physical parameter mapping (example: 0-5V → 0-100°C)
-#define LAB32_PHYS_MIN 0.0f
-#define LAB32_PHYS_MAX 100.0f
-#define LAB32_VOLTAGE_REF 5.0f
-
 // ============================================================================
 // Shared State (protected by mutex)
 // ============================================================================
 
-struct Lab32State {
+struct SignalData {
+  // Raw data
   uint16_t rawADC;              // Latest ADC reading (0-1023)
-  float voltage;                // Converted voltage (0-5V)
-  float physical;               // Physical parameter (e.g. temp in °C)
+  
+  // Filtered values (intermediate steps)
   float filteredSP;             // After Salt & Pepper filter
   float filteredWA;             // After Weighted Average filter
+  
+  // Converted values
+  float voltage;                // Converted voltage (0-5V)
+  float physical;               // Physical parameter (e.g. temp in °C)
+  
+  // Statistics
   uint32_t sampleCount;         // Total samples taken
-  uint16_t distanceCm;          // Ultrasonic distance (optional)
+  float minValue;               // Minimum physical value observed
+  float maxValue;               // Maximum physical value observed
+  
+  // Reset statistics
+  void resetStats() {
+    minValue = 999999.0f;
+    maxValue = -999999.0f;
+    sampleCount = 0;
+  }
+  
+  // Update statistics
+  void updateStats(float value) {
+    if (value < minValue) minValue = value;
+    if (value > maxValue) maxValue = value;
+    sampleCount++;
+  }
 };
 
-static Lab32State g_state = {0};
+// Global state for two sensors
+static SignalData g_sensor1 = {0};
+static SignalData g_sensor2 = {0};
 static SemaphoreHandle_t g_mutex = NULL;
 static bool g_lcdAvailable = false;
 
 // ============================================================================
-// Digital Filters
+// Filter and Converter Objects
+// ============================================================================
+
+// Filters for Sensor 1
+static SaltPepperFilter* spFilter1 = nullptr;
+static WeightedAverageFilter* waFilter1 = nullptr;
+static SignalConverter* converter1 = nullptr;
+
+// Filters for Sensor 2 (optional bonus sensor)
+static SaltPepperFilter* spFilter2 = nullptr;
+static WeightedAverageFilter* waFilter2 = nullptr;
+static SignalConverter* converter2 = nullptr;
+
+// ============================================================================
+// Signal Processing Pipeline
 // ============================================================================
 
 /**
- * Salt & Pepper Filter (Median Filter)
- * Removes impulse noise by taking median of recent samples
+ * Process signal through complete filtering and conversion pipeline
+ * @param rawADC Raw ADC reading (0-1023)
+ * @param spFilter Salt & Pepper filter instance
+ * @param waFilter Weighted Average filter instance
+ * @param converter Signal converter instance
+ * @param data Output signal data structure
  */
-class SaltPepperFilter {
-private:
-  float buffer[LAB32_SALT_PEPPER_WINDOW];
-  uint8_t index;
-  bool filled;
-
-public:
-  SaltPepperFilter() : index(0), filled(false) {
-    for (int i = 0; i < LAB32_SALT_PEPPER_WINDOW; i++) buffer[i] = 0;
-  }
-
-  float filter(float newSample) {
-    buffer[index] = newSample;
-    index = (index + 1) % LAB32_SALT_PEPPER_WINDOW;
-    if (index == 0) filled = true;
-
-    // Copy buffer for sorting
-    float sorted[LAB32_SALT_PEPPER_WINDOW];
-    for (int i = 0; i < LAB32_SALT_PEPPER_WINDOW; i++) sorted[i] = buffer[i];
-
-    // Bubble sort
-    for (int i = 0; i < LAB32_SALT_PEPPER_WINDOW - 1; i++) {
-      for (int j = i + 1; j < LAB32_SALT_PEPPER_WINDOW; j++) {
-        if (sorted[i] > sorted[j]) {
-          float temp = sorted[i];
-          sorted[i] = sorted[j];
-          sorted[j] = temp;
-        }
-      }
-    }
-
-    // Return median
-    return sorted[LAB32_SALT_PEPPER_WINDOW / 2];
-  }
-};
-
-/**
- * Weighted Moving Average Filter
- * Recent samples weighted more heavily
- * Weights: [1, 2, 3, 4, 5] for 5-sample window
- */
-class WeightedAverageFilter {
-private:
-  float buffer[LAB32_WEIGHTED_AVG_WINDOW];
-  uint8_t index;
-
-public:
-  WeightedAverageFilter() : index(0) {
-    for (int i = 0; i < LAB32_WEIGHTED_AVG_WINDOW; i++) buffer[i] = 0;
-  }
-
-  float filter(float newSample) {
-    buffer[index] = newSample;
-    index = (index + 1) % LAB32_WEIGHTED_AVG_WINDOW;
-
-    // Weighted sum: most recent gets highest weight
-    float weightedSum = 0;
-    uint16_t totalWeight = 0;
-    for (int i = 0; i < LAB32_WEIGHTED_AVG_WINDOW; i++) {
-      int weight = i + 1; // Weights: 1, 2, 3, 4, 5
-      int bufferIdx = (index + i) % LAB32_WEIGHTED_AVG_WINDOW;
-      weightedSum += buffer[bufferIdx] * weight;
-      totalWeight += weight;
-    }
-
-    return weightedSum / totalWeight;
-  }
-};
-
-static SaltPepperFilter* spFilter = nullptr;
-static WeightedAverageFilter* waFilter = nullptr;
-
-// ============================================================================
-// Conversion Functions
-// ============================================================================
-
-float adcToVoltage(uint16_t adc) {
-  return (adc / 1023.0f) * LAB32_VOLTAGE_REF;
-}
-
-float voltageToPhysical(float voltage) {
-  // Linear mapping: 0V→min, 5V→max
-  return LAB32_PHYS_MIN + (voltage / LAB32_VOLTAGE_REF) * (LAB32_PHYS_MAX - LAB32_PHYS_MIN);
-}
-
-float saturate(float value, float min, float max) {
-  if (value < min) return min;
-  if (value > max) return max;
-  return value;
-}
-
-// Read ultrasonic distance (optional)
-uint16_t readUltrasonicDistance() {
-  digitalWrite(ULTRASONIC_TRIG_PIN, LOW);
-  delayMicroseconds(2);
-  digitalWrite(ULTRASONIC_TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(ULTRASONIC_TRIG_PIN, LOW);
+void processSignal(uint16_t rawADC,
+                   SaltPepperFilter* spFilter,
+                   WeightedAverageFilter* waFilter,
+                   SignalConverter* converter,
+                   SignalData& data) {
+  // Store raw ADC
+  data.rawADC = rawADC;
   
-  long duration = pulseIn(ULTRASONIC_ECHO_PIN, HIGH, 30000); // 30ms timeout
-  if (duration == 0) return 0; // No echo
+  // Step 1: Convert ADC to voltage (for filtering in voltage domain)
+  float voltageRaw = converter->adcToVoltage(rawADC);
   
-  // Distance = duration / 58 (microseconds to cm)
-  return (uint16_t)(duration / 58);
+  // Step 2: Apply Salt & Pepper filter (median filter)
+  data.filteredSP = spFilter->filter(voltageRaw);
+  
+  // Step 3: Apply Weighted Average filter
+  data.filteredWA = waFilter->filter(data.filteredSP);
+  
+  // Step 4: Store final voltage
+  data.voltage = data.filteredWA;
+  
+  // Step 5: Convert voltage to physical parameter
+  float physical = converter->voltageToPhysical(data.voltage);
+  
+  // Step 6: Apply saturation
+  data.physical = converter->saturate(physical);
+  
+  // Update statistics
+  data.updateStats(data.physical);
 }
 
 // ============================================================================
@@ -295,133 +245,193 @@ uint16_t readUltrasonicDistance() {
 // ============================================================================
 
 /**
- * Task 1: Sampling and Signal Conditioning
- * Reads ADC, applies filters, performs conversions
+ * Task 1: Signal Sampling and Conditioning
+ * - Reads both sensors
+ * - Applies complete filtering pipeline
+ * - Uses vTaskDelayUntil for precise periodic execution
+ * - High priority (3) for real-time data acquisition
  */
-void taskSampling(void* pvParameters) {
+void taskSignalSampling(void* pvParameters) {
   (void)pvParameters;
   
-  pinMode(LAB32_SENSOR_PIN, INPUT);
-  pinMode(ULTRASONIC_TRIG_PIN, OUTPUT);
-  pinMode(ULTRASONIC_ECHO_PIN, INPUT);
-  digitalWrite(ULTRASONIC_TRIG_PIN, LOW);
+  // Configure pins
+  pinMode(LAB32_SENSOR1_PIN, INPUT);
+  pinMode(LAB32_SENSOR2_PIN, INPUT);
+  
+  // Initialize timing for periodic execution
+  TickType_t xLastWakeTime = xTaskGetTickCount();
+  const TickType_t xPeriod = pdMS_TO_TICKS(LAB32_SAMPLING_PERIOD_MS);
   
   for (;;) {
-    // Read raw ADC from potentiometer
-    uint16_t raw = analogRead(LAB32_SENSOR_PIN);
+    // Read both sensors
+    uint16_t rawADC1 = analogRead(LAB32_SENSOR1_PIN);
+    uint16_t rawADC2 = analogRead(LAB32_SENSOR2_PIN);
     
-    // Convert to voltage
-    float voltage = adcToVoltage(raw);
+    // Process Sensor 1 through complete pipeline
+    SignalData localSensor1;
+    processSignal(rawADC1, spFilter1, waFilter1, converter1, localSensor1);
     
-    // Apply Salt & Pepper filter (median)
-    float filteredSP = spFilter->filter(voltage);
+    // Process Sensor 2 through complete pipeline
+    SignalData localSensor2;
+    processSignal(rawADC2, spFilter2, waFilter2, converter2, localSensor2);
     
-    // Apply Weighted Average filter
-    float filteredWA = waFilter->filter(filteredSP);
-    
-    // Convert to physical parameter
-    float physical = voltageToPhysical(filteredWA);
-    
-    // Apply saturation
-    physical = saturate(physical, LAB32_PHYS_MIN, LAB32_PHYS_MAX);
-    
-    // Read ultrasonic distance (every 5th sample to save time)
-    uint16_t distance = 0;
-    static uint8_t ultrasonicCounter = 0;
-    if (++ultrasonicCounter >= 5) {
-      ultrasonicCounter = 0;
-      distance = readUltrasonicDistance();
-    }
-    
-    // Update shared state
+    // Update shared state (protected by mutex)
     if (xSemaphoreTake(g_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-      g_state.rawADC = raw;
-      g_state.voltage = voltage;
-      g_state.filteredSP = filteredSP;
-      g_state.filteredWA = filteredWA;
-      g_state.physical = physical;
-      g_state.sampleCount++;
-      if (distance > 0) g_state.distanceCm = distance;
+      g_sensor1 = localSensor1;
+      g_sensor2 = localSensor2;
       xSemaphoreGive(g_mutex);
     }
     
-    // Simple delay
-    vTaskDelay(pdMS_TO_TICKS(LAB32_SAMPLING_RATE_MS));
+    // Wait for next period (precise timing with vTaskDelayUntil)
+    vTaskDelayUntil(&xLastWakeTime, xPeriod);
   }
 }
 
 /**
- * Task 2: Periodic Reporting
- * Prints processed data via STDIO and updates LCD
+ * Task 2: Status Reporting
+ * - Periodic reporting via STDIO (printf)
+ * - Shows complete signal processing pipeline
+ * - Displays statistics (min/max/samples)
+ * - Uses vTaskDelayUntil for precise timing
+ * - Low priority (1) to not interfere with sampling
+ * - 50ms offset from sampling task
  */
-void taskReport(void* pvParameters) {
+void taskStatusReport(void* pvParameters) {
   (void)pvParameters;
   
-  // Offset task start
-  vTaskDelay(pdMS_TO_TICKS(50));
+  // Apply offset to stagger execution from sampling task
+  vTaskDelay(pdMS_TO_TICKS(LAB32_REPORT_TASK_OFFSET_MS));
+  
+  // Initialize timing for periodic execution
+  TickType_t xLastWakeTime = xTaskGetTickCount();
+  const TickType_t xPeriod = pdMS_TO_TICKS(LAB32_REPORT_PERIOD_MS);
+  
+  uint32_t reportCount = 0;
   
   for (;;) {
-    Lab32State state;
+    SignalData sensor1, sensor2;
     
-    // Read shared state
+    // Read shared state (protected by mutex)
     if (xSemaphoreTake(g_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-      state = g_state;
+      sensor1 = g_sensor1;
+      sensor2 = g_sensor2;
       xSemaphoreGive(g_mutex);
     } else {
-      printf("[LAB3.2] Mutex timeout!\n");
-      vTaskDelay(pdMS_TO_TICKS(LAB32_REPORT_RATE_MS));
+      printf("[LAB3.2] ERROR: Mutex timeout!\n");
+      vTaskDelayUntil(&xLastWakeTime, xPeriod);
       continue;
     }
     
-    // Convert floats to integers for AVR-safe printf
-    uint16_t voltMv = (uint16_t)(state.voltage * 1000);
-    uint16_t spMv = (uint16_t)(state.filteredSP * 1000);
-    uint16_t waMv = (uint16_t)(state.filteredWA * 1000);
-    uint16_t physInt = (uint16_t)(state.physical * 10); // 1 decimal
+    reportCount++;
     
-    // Serial output
-    printf("[LAB3.2] #%lu ADC=%u Raw=%umV SP=%umV WA=%umV Phys=%u.%u",
-           state.sampleCount,
-           state.rawADC,
-           voltMv,
-           spMv,
-           waMv,
-           physInt / 10,
-           physInt % 10);
-    
-    if (state.distanceCm > 0) {
-      printf(" Dist=%ucm", state.distanceCm);
-    }
+    // Header
+    printf("\n");
+    printf("========================================\n");
+    printf("  Lab 3.2: Signal Conditioning Report\n");
+    printf("========================================\n");
+    printf("Time: %lu ms | Report #%lu\n", millis(), reportCount);
     printf("\n");
     
-    // LCD output (if available)
-    if (g_lcdAvailable) {
-      lcdSetCursor(0, 0);
-      lcdPrint("ADC:");
-      lcdPrintInt(state.rawADC);
-      lcdPrint(" V:");
-      lcdPrintInt(voltMv / 1000);
-      lcdPrint(".");
-      lcdPrintInt((voltMv % 1000) / 100);
-      lcdPrint("V  ");
-      
-      lcdSetCursor(0, 1);
-      lcdPrint("P:");
-      lcdPrintInt(physInt / 10);
-      lcdPrint(".");
-      lcdPrintInt(physInt % 10);
-      
-      if (state.distanceCm > 0) {
-        lcdPrint(" D:");
-        lcdPrintInt(state.distanceCm);
-        lcdPrint("cm ");
-      } else {
-        lcdPrint("      ");
-      }
+    // Sensor 1 - Detailed Pipeline
+    printf("--- SENSOR 1 (Pin A0) ---\n");
+    printf("Signal Processing Pipeline:\n");
+    
+    // Convert to integers for AVR-compatible printf
+    uint16_t raw1 = sensor1.rawADC;
+    uint16_t sp1 = (uint16_t)(sensor1.filteredSP * 100);
+    uint16_t wa1 = (uint16_t)(sensor1.filteredWA * 100);
+    uint16_t volt1 = (uint16_t)(sensor1.voltage * 1000);
+    int16_t phys1 = (int16_t)(sensor1.physical * 10);
+    int16_t min1 = (int16_t)(sensor1.minValue * 10);
+    int16_t max1 = (int16_t)(sensor1.maxValue * 10);
+    int16_t range1 = (int16_t)((sensor1.maxValue - sensor1.minValue) * 10);
+    
+    printf("  Raw ADC:       %u (0-1023)\n", raw1);
+    printf("  -> S&P Filter: %u.%02u V\n", sp1/100, sp1%100);
+    printf("  -> Wtd Avg:    %u.%02u V\n", wa1/100, wa1%100);
+    printf("  -> Voltage:    %u.%03u V\n", volt1/1000, volt1%1000);
+    
+    if (phys1 >= 0) {
+      printf("  -> Physical:   %d.%u (saturated)\n", phys1/10, phys1%10);
+    } else {
+      printf("  -> Physical:   -%d.%u (saturated)\n", (-phys1)/10, (-phys1)%10);
     }
     
-    // Simple delay instead of DelayUntil
-    vTaskDelay(pdMS_TO_TICKS(LAB32_REPORT_RATE_MS));
+    printf("\nStatistics:\n");
+    printf("  Samples:   %lu\n", sensor1.sampleCount);
+    
+    if (min1 >= 0) {
+      printf("  Min Value: %d.%u\n", min1/10, min1%10);
+    } else {
+      printf("  Min Value: -%d.%u\n", (-min1)/10, (-min1)%10);
+    }
+    
+    if (max1 >= 0) {
+      printf("  Max Value: %d.%u\n", max1/10, max1%10);
+    } else {
+      printf("  Max Value: -%d.%u\n", (-max1)/10, (-max1)%10);
+    }
+    
+    if (range1 >= 0) {
+      printf("  Range:     %d.%u\n", range1/10, range1%10);
+    } else {
+      printf("  Range:     -%d.%u\n", (-range1)/10, (-range1)%10);
+    }
+    
+    // Sensor 2 - Summary
+    printf("\n--- SENSOR 2 (Pin A1) ---\n");
+    int16_t phys2 = (int16_t)(sensor2.physical * 10);
+    if (phys2 >= 0) {
+      printf("Physical Value: %d.%u\n", phys2/10, phys2%10);
+    } else {
+      printf("Physical Value: -%d.%u\n", (-phys2)/10, (-phys2)%10);
+    }
+    printf("Samples:        %lu\n", sensor2.sampleCount);
+    
+    // Filter Configuration
+    printf("\n[Filter Configuration]\n");
+    printf("  Salt & Pepper Window:  %u samples (median)\n", LAB32_SALT_PEPPER_WINDOW);
+    printf("  Weighted Avg Window:   %u samples (weighted)\n", LAB32_WEIGHTED_AVG_WINDOW);
+    printf("  Sampling Period:       %u ms\n", LAB32_SAMPLING_PERIOD_MS);
+    printf("  Report Period:         %u ms\n", LAB32_REPORT_PERIOD_MS);
+    printf("========================================\n");
+    
+    // LCD output (if available) - simple display
+    if (g_lcdAvailable) {
+      lcdSetCursor(0, 0);
+      lcdPrint("S1:");
+      if (phys1 >= 0) {
+        lcdPrintInt(phys1 / 10);
+        lcdPrint(".");
+        lcdPrintInt(phys1 % 10);
+      } else {
+        lcdPrint("-");
+        lcdPrintInt((-phys1) / 10);
+        lcdPrint(".");
+        lcdPrintInt((-phys1) % 10);
+      }
+      
+      lcdSetCursor(8, 0);
+      lcdPrint("S2:");
+      if (phys2 >= 0) {
+        lcdPrintInt(phys2 / 10);
+        lcdPrint(".");
+        lcdPrintInt(phys2 % 10);
+      } else {
+        lcdPrint("-");
+        lcdPrintInt((-phys2) / 10);
+        lcdPrint(".");
+        lcdPrintInt((-phys2) % 10);
+      }
+      
+      lcdSetCursor(0, 1);
+      lcdPrint("N:");
+      lcdPrintInt(sensor1.sampleCount);
+      lcdPrint("     ");
+    }
+    
+    // Wait for next period (precise timing with vTaskDelayUntil)
+    vTaskDelayUntil(&xLastWakeTime, xPeriod);
   }
 }
 
@@ -430,60 +440,111 @@ void taskReport(void* pvParameters) {
 // ============================================================================
 
 void setup_lab3_2() {
-  printf("\nLAB 3.2: Signal Conditioning\n");
-  printf("Sensors: Pot(A0), Ultrasonic(D8/D9)\n");
-  printf("Filters: SP(N=5), WA(N=5)\n");
-  printf("Display: LCD1602\n\n");
+  printf("\n");
+  printf("╔════════════════════════════════════════╗\n");
+  printf("║  LAB 3.2: Signal Conditioning          ║\n");
+  printf("╚════════════════════════════════════════╝\n");
+  printf("\n");
+  printf("Configuration:\n");
+  printf("  Sensor 1:    Pin A0\n");
+  printf("  Sensor 2:    Pin A1 (bonus)\n");
+  printf("  Filters:     Salt&Pepper (N=%u), Weighted Avg (N=%u)\n", 
+         LAB32_SALT_PEPPER_WINDOW, LAB32_WEIGHTED_AVG_WINDOW);
+  printf("  Timing:      Sample=%ums, Report=%ums\n",
+         LAB32_SAMPLING_PERIOD_MS, LAB32_REPORT_PERIOD_MS);
+  printf("  Display:     LCD 16x2\n");
+  printf("\n");
   
-  // Create filter objects
-  spFilter = new SaltPepperFilter();
-  waFilter = new WeightedAverageFilter();
+  // Initialize statistics
+  g_sensor1.resetStats();
+  g_sensor2.resetStats();
+  
+  // Create filter objects for Sensor 1
+  printf("Creating Sensor 1 filters...\n");
+  spFilter1 = new SaltPepperFilter(LAB32_SALT_PEPPER_WINDOW);
+  waFilter1 = new WeightedAverageFilter(LAB32_WEIGHTED_AVG_WINDOW);
+  converter1 = new SignalConverter(
+    LAB32_ADC_RESOLUTION,
+    LAB32_ADC_REFERENCE_VOLTAGE,
+    LAB32_SENSOR1_VOLTAGE_SCALE,
+    LAB32_SENSOR1_VOLTAGE_OFFSET,
+    LAB32_SENSOR1_MIN_VALUE,
+    LAB32_SENSOR1_MAX_VALUE
+  );
+  
+  // Create filter objects for Sensor 2
+  printf("Creating Sensor 2 filters...\n");
+  spFilter2 = new SaltPepperFilter(LAB32_SALT_PEPPER_WINDOW);
+  waFilter2 = new WeightedAverageFilter(LAB32_WEIGHTED_AVG_WINDOW);
+  converter2 = new SignalConverter(
+    LAB32_ADC_RESOLUTION,
+    LAB32_ADC_REFERENCE_VOLTAGE,
+    LAB32_SENSOR1_VOLTAGE_SCALE,
+    LAB32_SENSOR1_VOLTAGE_OFFSET,
+    LAB32_SENSOR1_MIN_VALUE,
+    LAB32_SENSOR1_MAX_VALUE
+  );
   
   // Configure pins
-  pinMode(LAB32_SENSOR_PIN, INPUT);
-  pinMode(ULTRASONIC_TRIG_PIN, OUTPUT);
-  pinMode(ULTRASONIC_ECHO_PIN, INPUT);
+  pinMode(LAB32_SENSOR1_PIN, INPUT);
+  pinMode(LAB32_SENSOR2_PIN, INPUT);
   
   // Initialize LCD
+  printf("Initializing LCD...\n");
   lcdInit();
-  
-  printf("LCD init OK\n");
-  
   lcdClear();
   lcdSetCursor(0, 0);
   lcdPrint("LAB 3.2");
   lcdSetCursor(0, 1);
   lcdPrint("Starting...");
   g_lcdAvailable = true;
-  
-  delay(1500);
+  delay(1000);
   lcdClear();
   
-  // Create mutex
+  // Create mutex for shared data protection
+  printf("Creating mutex...\n");
   g_mutex = xSemaphoreCreateMutex();
   if (g_mutex == NULL) {
-    printf("ERR: Mutex\n");
+    printf("ERROR: Failed to create mutex!\n");
     while (1) delay(1000);
   }
   
-  printf("Creating tasks\n");
+  // Create FreeRTOS tasks
+  printf("Creating tasks...\n");
   
-  // Create tasks with larger stacks
-  BaseType_t r1 = xTaskCreate(taskSampling, "Samp", 256, NULL, 2, NULL);
-  BaseType_t r2 = xTaskCreate(taskReport, "Rpt", 256, NULL, 1, NULL);
+  BaseType_t result1 = xTaskCreate(
+    taskSignalSampling,
+    "Sampling",
+    LAB32_SAMPLING_TASK_STACK / sizeof(StackType_t),
+    NULL,
+    LAB32_SAMPLING_TASK_PRIORITY,
+    NULL
+  );
   
-  if (r1 != pdPASS || r2 != pdPASS) {
-    printf("ERR: Tasks\n");
+  BaseType_t result2 = xTaskCreate(
+    taskStatusReport,
+    "Report",
+    LAB32_REPORT_TASK_STACK / sizeof(StackType_t),
+    NULL,
+    LAB32_REPORT_TASK_PRIORITY,
+    NULL
+  );
+  
+  if (result1 != pdPASS || result2 != pdPASS) {
+    printf("ERROR: Failed to create tasks!\n");
+    printf("  Sampling task: %s\n", result1 == pdPASS ? "OK" : "FAIL");
+    printf("  Report task:   %s\n", result2 == pdPASS ? "OK" : "FAIL");
     while (1) delay(1000);
   }
   
-  printf("Starting scheduler\n\n");
+  printf("Tasks created successfully.\n");
+  printf("Starting FreeRTOS scheduler...\n\n");
   
-  // Start scheduler - never returns
+  // Start FreeRTOS scheduler (never returns)
   vTaskStartScheduler();
   
   // Should never reach here
-  printf("ERR: Scheduler\n");
+  printf("ERROR: Scheduler failed to start!\n");
   while (1) delay(1000);
 }
 
