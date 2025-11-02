@@ -33,6 +33,15 @@ Keypad keypad = Keypad(makeKeymap(kKeys), kRowPins, kColPins, kRows, kCols);
 } // namespace
 
 /**
+ * Initializes the keypad hardware.
+ * Currently a no-op as Keypad library handles initialization in its constructor.
+ */
+void KeypadIni() {
+  // The Keypad object is initialized at startup via its constructor.
+  // This function exists for API compatibility with own_stdio.
+}
+
+/**
  * Reads the current keypad state and returns the pressed key character.
  * Non-blocking: returns 0 (NO_KEY) immediately if no key is pressed.
  * @return Character code of pressed key, or 0 if no key is pressed

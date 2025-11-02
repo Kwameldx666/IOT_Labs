@@ -1,48 +1,20 @@
-#define LAB2_1
-// #define LAB1_1
-// #define LAB1_2
+/**
+ * @file main.cpp
+ * @brief Main entry point for IOT Laboratory exercises
+ * 
+ * This file contains the standard Arduino setup() and loop() functions.
+ * Lab selection and execution is delegated to the AppManager module.
+ * 
+ * To switch between labs, modify ACTIVE_LAB constant in app_manager.hpp
+ */
 
 #include <Arduino.h>
-#include "dd_serial.hpp"
-
-#ifdef LAB1_1
-#include "lab1/lab1_1.hpp"
-#endif
-
-#ifdef LAB1_2
-#include "lab1/lab1_2.hpp"
-#endif
-
-#ifdef LAB2_1
-#include "lab2/lab2_1.hpp"
-#endif
+#include "app_manager.hpp"
 
 void setup() {
-  SerialBegin();
-
-#ifdef LAB1_1
-  setup_lab1_1();
-#endif
-
-#ifdef LAB1_2
-  setup_lab1_2();
-#endif
-
-#ifdef LAB2_1
-  setup_lab2_1();
-#endif
+  appManagerSetup();
 }
 
 void loop() {
-#ifdef LAB1_1
-  loop_lab1_1();
-#endif
-
-#ifdef LAB1_2
-  loop_lab1_2();
-#endif
-
-#ifdef LAB2_1
-  loop_lab2_1();
-#endif
+  appManagerLoop();
 }

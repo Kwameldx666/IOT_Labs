@@ -12,7 +12,11 @@ static FILE serial_stdio_stream = {0};
  */
 void SerialBegin() {
     Serial.begin(SERIAL_BAUD_RATE);
+    while (!Serial) {
+        ; // Wait for Serial port to connect (needed for some boards)
+    }
     delay(SERIAL_INIT_DELAY_MS); // Wait for Serial port to stabilize
+    Serial.flush(); // Clear any garbage in buffer
     fdev_setup_stream(&serial_stdio_stream, my_putchar, my_getchar, _FDEV_SETUP_RW);
     stdin  = stdout = stderr = &serial_stdio_stream;
 }

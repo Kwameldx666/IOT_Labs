@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CopilotDiffPersistence">
+    <option name="pendingDiffs">
+      <map>
+        <entry key="$PROJECT_DIR$/lib/relay_driver/relay_driver.hpp">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/lib/relay_driver/relay_driver.hpp" />
+              <option name="updatedContent" value="#ifndef RELAY_DRIVER_HPP&#10;#define RELAY_DRIVER_HPP&#10;&#10;#include &lt;stdint.h&gt;&#10;&#10;/**&#10; * @file relay_driver.hpp&#10; * @brief Reusable Relay Driver with Layered Architecture&#10; * &#10; * Three-layer architecture:&#10; * - Hardware Abstraction Layer (HAL): pinMode, digitalWrite&#10; * - Driver Layer: Relay control logic&#10; * - Application Layer: High-level interface&#10; */&#10;&#10;// ============================================================================&#10;// Hardware Abstraction Layer (HAL)&#10;// ============================================================================&#10;&#10;namespace RelayHAL {&#10;  /**&#10;   * @brief Initialize GPIO pin for relay&#10;   * @param pin Pin number&#10;   */&#10;  void initPin(uint8_t pin);&#10;  &#10;  /**&#10;   * @brief Set relay pin state&#10;   * @param pin Pin number&#10;   * @param state true = HIGH, false = LOW&#10;   */&#10;  void setPinState(uint8_t pin, bool state);&#10;  &#10;  /**&#10;   * @brief Read relay pin state&#10;   * @param pin Pin number&#10;   * @return Current pin state&#10;   */&#10;  bool getPinState(uint8_t pin);&#10;}&#10;&#10;// ============================================================================&#10;// Driver Layer&#10;// ============================================================================&#10;&#10;enum class RelayState {&#10;  OFF = 0,&#10;  ON = 1&#10;};&#10;&#10;/**&#10; * @class RelayDriver&#10; * @brief Low-level relay control driver&#10; */&#10;class RelayDriver {&#10;public:&#10;  /**&#10;   * @brief Constructor&#10;   * @param pin Control pin number&#10;   * @param activeHigh true if relay is active-high, false if active-low&#10;   */&#10;  explicit RelayDriver(uint8_t pin, bool activeHigh = true);&#10;  &#10;  /**&#10;   * @brief Initialize relay hardware&#10;   */&#10;  void begin();&#10;  &#10;  /**&#10;   * @brief Turn relay on&#10;   */&#10;  void turnOn();&#10;  &#10;  /**&#10;   * @brief Turn relay off&#10;   */&#10;  void turnOff();&#10;  &#10;  /**&#10;   * @brief Toggle relay state&#10;   */&#10;  void toggle();&#10;  &#10;  /**&#10;   * @brief Set relay state&#10;   * @param state Desired relay state&#10;   */&#10;  void setState(RelayState state);&#10;  &#10;  /**&#10;   * @brief Get current relay state&#10;   * @return Current state&#10;   */&#10;  RelayState getState() const { return m_state; }&#10;  &#10;  /**&#10;   * @brief Check if relay is on&#10;   * @return true if relay is on&#10;   */&#10;  bool isOn() const { return m_state == RelayState::ON; }&#10;&#10;private:&#10;  uint8_t m_pin;&#10;  bool m_activeHigh;&#10;  RelayState m_state;&#10;  &#10;  void updateHardware();&#10;};&#10;&#10;#endif // RELAY_DRIVER_HPP&#10;" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+        <entry key="$PROJECT_DIR$/src/lab5/lab5_2.hpp">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/src/lab5/lab5_2.hpp" />
+              <option name="originalContent" value="#ifndef LAB5_2_HPP&#10;#define LAB5_2_HPP&#10;&#10;/**&#10; * @file lab5_2.hpp&#10; * @brief Lab 5.2 - Control Comparison: ON-OFF vs PID&#10; * &#10; * Dual control system demonstration:&#10; * a) ON-OFF control with hysteresis (temperature/humidity)&#10; * b) PID control for motor speed with encoder feedback&#10; * &#10; * Features:&#10; * - Mode switching between ON-OFF and PID&#10; * - Setpoint adjustment via Serial/buttons&#10; * - LCD display with controller status&#10; * - Serial Plotter for performance comparison&#10; */&#10;&#10;void setup_lab5_2();&#10;void loop_lab5_2();&#10;&#10;#endif // LAB5_2_HPP&#10;" />
+              <option name="updatedContent" value="#ifndef LAB5_2_HPP&#10;#define LAB5_2_HPP&#10;&#10;/**&#10; * @file lab5_2.hpp&#10; * @brief Lab 5.2 - Control Comparison: ON-OFF vs PID&#10; * &#10; * Dual control system demonstration:&#10; * a) ON-OFF control with hysteresis (temperature/humidity)&#10; * b) PID control for motor speed with encoder feedback&#10; * &#10; * Features:&#10; * - Mode switching between ON-OFF and PID&#10; * - Setpoint adjustment via Serial/buttons&#10; * - LCD display with controller status&#10; * - Serial Plotter for performance comparison&#10; */&#10;&#10;void setup_lab5_2();&#10;void loop_lab5_2();&#10;&#10;#endif // LAB5_2_HPP&#10;" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>
