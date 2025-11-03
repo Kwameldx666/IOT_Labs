@@ -102,23 +102,26 @@ void appManagerSetup() {
     }
     g_currentLab = newLab;
     
-    printf("\n");
-    printf(">> Starting: LAB");
-    printf("%d", labCode);
-    printf("\n\n");
+    Serial.println();
+    Serial.print(F(">> Starting: LAB"));
+    delay(10);
+    Serial.println(labCode);
+    delay(10);
+    Serial.println();
     
     firstRun = false;
   }
   
   if (g_labInitialized) return;
   
-  printf("Init: LAB");
-  printf("%d", labCode);
-  printf("\n");
+  Serial.print(F("Init: LAB"));
+  delay(10);
+  Serial.println(labCode);
+  delay(10);
   
   switch (g_currentLab) {
     case LabSelection::NONE: 
-      printf("Idle.\n");
+      Serial.println(F("Idle."));
       break;
     case LabSelection::LAB1_1: setup_lab1_1(); break;
     case LabSelection::LAB1_2: setup_lab1_2(); break;
@@ -136,15 +139,16 @@ void appManagerSetup() {
     case LabSelection::LAB7_2_MCU1:
     case LabSelection::LAB7_2_MCU2:
     case LabSelection::LAB7_3:
-      printf("Not impl.\n");
+      Serial.println(F("Not impl."));
       break;
     default:
-      printf("Unknown!\n");
+      Serial.println(F("Unknown!"));
       break;
   }
   
   g_labInitialized = true;
-  printf("Ready.\n\n");
+  Serial.println(F("Ready."));
+  Serial.println();
 }
 
 void appManagerLoop() {

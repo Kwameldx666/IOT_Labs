@@ -132,8 +132,9 @@
 // Lab 3.2 Configuration - Signal Conditioning with Digital Filters
 // ============================================================================
 // Sensor pins
-#define LAB32_SENSOR1_PIN A0            ///< Primary analog sensor pin
-#define LAB32_SENSOR2_PIN A1            ///< Secondary sensor pin (optional)
+#define LAB32_SENSOR1_PIN A0            ///< Primary analog sensor pin (potentiometer)
+#define LAB32_ULTRASONIC_TRIG_PIN 8     ///< HC-SR04 TRIG pin
+#define LAB32_ULTRASONIC_ECHO_PIN 9     ///< HC-SR04 ECHO pin
 
 // Task timing (FreeRTOS)
 #define LAB32_SAMPLING_PERIOD_MS 100    ///< Sampling period (fast for filtering)
@@ -147,7 +148,7 @@
 
 // Stack sizes
 #define LAB32_SAMPLING_TASK_STACK 512   ///< Sampling task stack
-#define LAB32_REPORT_TASK_STACK 768     ///< Report task stack (printf)
+#define LAB32_REPORT_TASK_STACK 1024    ///< Report task stack (printf needs more)
 
 // ADC configuration
 #define LAB32_ADC_RESOLUTION 1023.0f    ///< 10-bit ADC resolution
@@ -163,6 +164,16 @@
 #define LAB32_SALT_PEPPER_WINDOW 5      ///< Salt & Pepper filter window size
 #define LAB32_MOVING_AVG_WINDOW 10      ///< Moving average window size
 #define LAB32_WEIGHTED_AVG_WINDOW 5     ///< Weighted average window size
+
+// LED indicator pins
+#define LAB32_LED_GREEN 10              ///< Green LED (system OK)
+#define LAB32_LED_YELLOW 11             ///< Yellow LED (warning threshold)
+#define LAB32_LED_RED 12                ///< Red LED (alarm threshold)
+
+// Threshold values for LED indicators (based on potentiometer ADC)
+#define LAB32_THRESHOLD_LOW 300         ///< Below this: Green only
+#define LAB32_THRESHOLD_HIGH 700        ///< Above this: Red alarm
+// Between LOW and HIGH: Yellow warning
 
 // ============================================================================
 // Lab 4.1 Configuration - Actuators Control (Relay, Light, Motor)

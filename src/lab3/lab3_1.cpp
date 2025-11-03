@@ -64,7 +64,7 @@ namespace {
 // FreeRTOS Task 1: Sensor Reading
 // ============================================================================
 
-void taskSensorRead(void* pvParameters) {
+static void taskSensorRead(void* pvParameters) {
   (void)pvParameters;
   
   TickType_t xLastWakeTime = xTaskGetTickCount();
@@ -125,7 +125,7 @@ void taskSensorRead(void* pvParameters) {
 // FreeRTOS Task 2: Status Reporting
 // ============================================================================
 
-void taskStatusReport(void* pvParameters) {
+static void taskStatusReport(void* pvParameters) {
   (void)pvParameters;
   
   TickType_t xLastWakeTime = xTaskGetTickCount();
