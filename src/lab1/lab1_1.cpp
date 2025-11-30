@@ -1,50 +1,33 @@
-#include "lab1_1.hpp"
-#include <stdio.h>
-#include <string.h>
-#include "config.h"
+#include "lab1/lab1_1.hpp"
 
-/**
- * Displays the list of available commands to the user via Serial output.
- */
-void Instructions() {
-  printf("Available commands:\n");
-  printf("  led on  - Turn on the LED\n");
-  printf("  led off - Turn off the LED\n");
-}
+#include "CustomSTDIO.h"
+#include "DriverLed.h"
 
-/**
- * Initializes Lab 1.1: sets up Serial communication and LED hardware,
- * then prints welcome message and command instructions.
- */
+static constexpr int kLedPin = 7;
+
 void setup_lab1_1() {
-  SerialBegin();
-  LedIni();
-  printf("Setup complete.\n");
-  Instructions();
+	StdioSerialSetup();
+	pinMode(kLedPin, OUTPUT);
+	ledOff(kLedPin);
+
+	printf("System ready. Commands: 'led on', 'led off'.\n");
 }
 
-/**
- * Main loop for Lab 1.1: continuously reads commands from Serial input
- * and executes LED control actions. Runs in an infinite loop, waiting
- * for user to type "led on" or "led off" commands.
- */
 void loop_lab1_1() {
-  char input[SETUP_INIT_SIZE];
+	char buffer[32];
+	if (!fgets(buffer, sizeof(buffer), stdin)) {
+		return;
+	}
 
-  while (true) {
-    printf("\nEnter command: ");
-    scanf(" %[^\n]", input);
+	buffer[strcspn(buffer, "\r\n")] = '\0';
 
-    if (!strcmp(input, "led on")) {
-      LedOn_13();
-      printf("LED ON\n");
-    } 
-    else if (!strcmp(input, "led off")) {
-      LedOff_13();
-      printf("LED OFF\n");
-    } 
-    else {
-      printf("Unknown command\n");
-    }
-  }
+	if (strcmp(buffer, "led on") == 0) {
+		ledOn(kLedPin);
+		printf("LED is ON\n");
+	} else if (strcmp(buffer, "led off") == 0) {
+		ledOff(kLedPin);
+		printf("LED is OFF\n");
+	} else {
+		printf("Unknown command\n");
+	}
 }

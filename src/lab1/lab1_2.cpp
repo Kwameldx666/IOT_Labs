@@ -1,117 +1,87 @@
-/**
- * @file lab1_2.cpp
- * @brief Lab 1.2 - Access Control with Keypad (Unified, Uses Libraries)
- * 
- * Complete implementation using reusable libraries:
- * - StatusIndicator for LED feedback
- * - LcdHelper for display formatting
- * - own_stdio for keypad input
- */
+#include "lab1/lab1_2.hpp"
 
-#include "lab1_2.hpp"
-#include <stdio.h>
+#include <ctype.h>
 #include <string.h>
-#include "config.h"
-#include "own_stdio.h"
-#include "status_indicator.hpp"
-#include "lcd_helper.hpp"
-#include "dd_led.hpp"
 
-namespace {
+#include "CustomKeypad.h"
+#include "CustomSTDIO.h"
+#include "LCDDisplay.h"
+#include "DriverLed.h"
 
-bool g_accessGranted = false;
-bool g_promptShown = false;
+static constexpr int kRedLedPin = 3;
+static constexpr int kGreenLedPin = 2;
+static constexpr char kCorrectCode[] = "1234";
 
-// Use reusable StatusIndicator library
-StatusIndicator statusLed(GREEN_LED_PIN, RED_LED_PIN);
+static char g_input[5];
+static int g_index = 0;
 
-/**
- * Displays the input prompt on the LCD if not already shown.
- */
-void showPrompt() {
-    if (g_promptShown) {
-        return;
-    }
-
-    own_stdio_set_input_limit(ACCESS_CODE_LENGTH);
-    LcdHelper::showStatus("WAIT", "Code: ");
-    g_promptShown = true;
+static void resetInput() {
+	g_index = 0;
+	clearScreen();
+	lcdPrint("Enter Code:");
+	lcdSetCursor(0, 1);
 }
 
-/**
- * Shows the access result on LCD and via LEDs with timed hold.
- */
-void reportResult(bool success, const char* code) {
-    char displayLine[20];
-    snprintf(displayLine, sizeof(displayLine), "Code: %s", code);
-    
-    if (success) {
-        Serial.println(F("[Lab1.2] Access granted."));
-        LcdHelper::showStatus("OK", displayLine);
-        statusLed.showAndHold(StatusType::SUCCESS, LAB1_RESULT_HOLD_MS, LAB1_RESULT_TICK_MS);
-        g_accessGranted = true;
-    } else {
-        Serial.println(F("[Lab1.2] Access denied."));
-        LcdHelper::showStatus("FAIL", displayLine);
-        statusLed.showAndHold(StatusType::FAILURE, LAB1_RESULT_HOLD_MS, LAB1_RESULT_TICK_MS);
-    }
+static void showMessage(const char* msg) {
+	clearScreen();
+	lcdPrint(msg);
 }
 
-} // namespace
+static void setAccessLED(bool granted) {
+	if (granted) {
+		ledOn(kGreenLedPin);
+		ledOff(kRedLedPin);
+	} else {
+		ledOff(kGreenLedPin);
+		ledOn(kRedLedPin);
+	}
+}
 
-/**
- * Initializes Lab 1.2: sets up LEDs, prints instructions to Serial monitor,
- * initializes the custom stdio system with LCD/keypad, and displays the initial
- * prompt asking for the 4-digit access code.
- */
 void setup_lab1_2() {
-    // Initialize hardware
-    LedIni();
-    statusLed.begin();
-    statusLed.clear();
+	StdioSerialSetup();
+	lcdSetup();
 
-    // Print instructions
-    Serial.println(F("\n==== Lab 1.2: Access Control ===="));
-    Serial.println(F("Enter 4-digit code on keypad"));
-    Serial.println(F("'*' = erase, '#' = submit\n"));
+	pinMode(kRedLedPin, OUTPUT);
+	pinMode(kGreenLedPin, OUTPUT);
+	ledOff(kRedLedPin);
+	ledOff(kGreenLedPin);
 
-    // Initialize LCD/Keypad stdio
-    own_stdio_init(SERIAL_BAUD_RATE);
-    own_stdio_set_input_limit(ACCESS_CODE_LENGTH);
-
-    g_accessGranted = false;
-    g_promptShown = false;
-
-    showPrompt();
+	resetInput();
 }
 
 void loop_lab1_2() {
-    static char input[ACCESS_CODE_BUFFER_SIZE] = {0};
+	const char key = keypad.getKey();
+	if (!key) {
+		return;
+	}
 
-    if (g_accessGranted) {
-        return;  // Exit if access granted
-    }
+	printf("[KEYPAD] Pressed key: %c\n", key);
 
-    showPrompt();
+	if (isdigit(static_cast<unsigned char>(key)) && g_index < 4) {
+		g_input[g_index++] = key;
+		lcdSetCursor(g_index - 1, 1);
+		lcdPrint("*");
+	}
 
-    // Wait for keypad input
-    int result = scanf("%4s", input);
-    if (result != 1) {
-        return;
-    }
+	if (key == '#') {
+		g_input[g_index] = '\0';
 
-    g_promptShown = false;
+		if (strcmp(g_input, kCorrectCode) == 0) {
+			showMessage("Access Granted");
+			printf("[SYSTEM] Correct code entered\n");
+			setAccessLED(true);
+		} else {
+			showMessage("Access Denied");
+			printf("[SYSTEM] Wrong code: %s\n", g_input);
+			setAccessLED(false);
+		}
 
-    // Validate code
-    bool accessGranted = (strlen(input) == ACCESS_CODE_LENGTH) && 
-                         (strcmp(input, ACCESS_CODE) == 0);
-    
-    reportResult(accessGranted, input);
+		delay(2000);
+		resetInput();
+	}
 
-    if (!accessGranted) {
-        // Reset for retry
-        memset(input, 0, sizeof(input));
-        own_stdio_set_input_limit(ACCESS_CODE_LENGTH);
-        showPrompt();
-    }
+	if (key == '*') {
+		printf("[SYSTEM] Code cleared\n");
+		resetInput();
+	}
 }

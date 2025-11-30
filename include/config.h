@@ -70,10 +70,10 @@
 // Lab Selection - Config Only (No Menu)
 // ============================================================================
 // Set LAB_SELECTED_CODE to the lab you want to run at boot.
-// Options: 0, 11, 12, 21, 31, 32, 41, 42, 51, 52, 61, 62, 71, 72, 73, 74, 75
+// Options: 0, 11, 12, 21, 31, 32, 41, 42, 51, 52, 61, 62
 // No interactive menu - change this value and rebuild to switch labs.
 #ifndef LAB_SELECTED_CODE
-#define LAB_SELECTED_CODE 32
+#define LAB_SELECTED_CODE 62
 #endif
 
 // ============================================================================
@@ -83,6 +83,15 @@
 #define BUTTON_TOGGLE_PIN 7
 #define BUTTON_INC_PIN 6
 #define BUTTON_DEC_PIN 5
+
+// Lab 3.1 pins
+#define LAB31_BUTTON_PIN 13
+#define LAB31_LED_RED_PIN 3
+#define LAB31_LED_GREEN_PIN 2
+#define LAB31_PIN_TRIG 10
+#define LAB31_PIN_ECHO 8
+#define LAB31_MQ2_PIN A0
+
 
 // ============================================================================
 // Lab 2.1 Configuration - Task Scheduler
@@ -179,7 +188,7 @@
 // Lab 4.1 Configuration - Actuators Control (Relay, Light, Motor)
 // ============================================================================
 // Relay pins
-#define LAB41_RELAY1_PIN 22             ///< Relay 1 control pin
+#define LAB41_RELAY1_PIN 7              ///< Relay 1 control pin (diagram: Mega D7)
 #define LAB41_RELAY2_PIN 23             ///< Relay 2 control pin (for motor direction)
 
 // Light bulb control (through relay)
@@ -201,13 +210,17 @@
 // LCD update period
 #define LAB41_LCD_UPDATE_PERIOD_MS 500  ///< LCD refresh period
 
+#define LAB21_BUTTON_PIN 6
+#define LAB21_LED_RED_PIN 4
+#define LAB21_LED_GREEN_PIN 5
+
 // ============================================================================
 // Lab 4.2 Configuration - DC Motor Control (-100% to +100%)
 // ============================================================================
 // DC Motor pins (same as Lab 4.1 or different)
-#define LAB42_MOTOR_ENABLE_PIN 9        ///< PWM pin for motor speed
-#define LAB42_MOTOR_DIR_PIN1 24         ///< Motor direction pin 1
-#define LAB42_MOTOR_DIR_PIN2 25         ///< Motor direction pin 2
+#define LAB42_MOTOR_ENABLE_PIN 6       ///< PWM pin for motor speed
+#define LAB42_MOTOR_PIN1 5             ///< Motor direction pin 1
+#define LAB42_MOTOR_PIN2 4             ///< Motor direction pin 2
 
 // Power range
 #define LAB42_MOTOR_POWER_MIN -100      ///< Min power (full reverse)
@@ -216,205 +229,88 @@
 
 // LCD update
 #define LAB42_LCD_UPDATE_PERIOD_MS 300  ///< LCD refresh period
-
-// Command buffer
 #define LAB42_COMMAND_BUFFER_SIZE 64    ///< Serial command buffer size
 
 // ============================================================================
-// Lab 5.1 Configuration - ON-OFF Control with Hysteresis
+// Lab 5.1 Configuration - Temperature Safety Controller
 // ============================================================================
-// Temperature/Humidity sensor
-#define LAB51_SENSOR_PIN A0             ///< Sensor analog pin
-#define LAB51_SENSOR_MIN 0.0f           ///< Min sensor value
-#define LAB51_SENSOR_MAX 100.0f         ///< Max sensor value
+#define LAB51_TMP36_PIN A0              ///< Analog pin for TMP36 sensor
+#define LAB51_MOTOR_RELAY_PIN 13        ///< Relay to drive the fan/motor
+#define LAB51_ALARM_RELAY_PIN 7         ///< Relay for alarm lamp/siren
+#define LAB51_BUTTON_UP_PIN 3           ///< Increment setpoint button
+#define LAB51_BUTTON_DOWN_PIN 4         ///< Decrement setpoint button
+#define LAB51_LED_RED_PIN 10            ///< Red LED output
+#define LAB51_LED_GREEN_PIN 11          ///< Green LED output
+#define LAB51_LED_BLUE_PIN 12           ///< Blue LED output
 
-// Control relay
-#define LAB51_RELAY_PIN 22              ///< Relay control pin
-
-// ON-OFF Control parameters
-#define LAB51_SETPOINT_DEFAULT 25.0f    ///< Default setpoint (°C or %RH)
-#define LAB51_SETPOINT_MIN 0.0f         ///< Min setpoint
-#define LAB51_SETPOINT_MAX 50.0f        ///< Max setpoint
-#define LAB51_HYSTERESIS_DEFAULT 2.0f   ///< Default hysteresis (±2°C)
-#define LAB51_HYSTERESIS_MIN 0.5f       ///< Min hysteresis
-#define LAB51_HYSTERESIS_MAX 10.0f      ///< Max hysteresis
-
-// Setpoint adjustment
-#define LAB51_SETPOINT_STEP 0.5f        ///< Step for UP/DOWN buttons
-#define LAB51_BUTTON_UP_PIN 6           ///< UP button pin
-#define LAB51_BUTTON_DOWN_PIN 5         ///< DOWN button pin
-
-// Update periods
-#define LAB51_SENSOR_READ_PERIOD_MS 500 ///< Sensor reading period
-#define LAB51_LCD_UPDATE_PERIOD_MS 500  ///< LCD update period
-#define LAB51_PLOTTER_PERIOD_MS 500     ///< Serial plotter update
-
-// Command buffer
-#define LAB51_COMMAND_BUFFER_SIZE 64    ///< Serial command buffer
+#define LAB51_START_SETPOINT_C 25.0f    ///< Default temperature setpoint
+#define LAB51_STEP_SETPOINT_C 0.5f      ///< Button step size in Celsius
+#define LAB51_NORMAL_RANGE_C 2.0f       ///< +/- normal zone around setpoint
+#define LAB51_EXTREME_DELTA_C 10.0f     ///< Alarm threshold above setpoint
+#define LAB51_DEBOUNCE_MS 80            ///< Button debounce interval
+#define LAB51_LCD_REFRESH_PERIOD_MS 200 ///< Minimum LCD refresh interval
+#define LAB51_TELEMETRY_PERIOD_MS 1000  ///< StdIO log period
 
 // ============================================================================
-// Lab 5.2 Configuration - PID Motor Speed Control with Encoder
+// Lab 5.2 Configuration - PID Temperature Control (PWM)
 // ============================================================================
-// Motor control (reuse from Lab 4.2)
-#define LAB52_MOTOR_ENABLE_PIN 9        ///< PWM pin for motor speed
-#define LAB52_MOTOR_DIR_PIN1 24         ///< Motor direction pin 1
-#define LAB52_MOTOR_DIR_PIN2 25         ///< Motor direction pin 2
+#define LAB52_TMP36_PIN A0                ///< Analog pin for TMP36 sensor
+#define LAB52_PWM_PIN 9                   ///< PWM output pin driving nMOS/SSR
+#define LAB52_BUTTON_UP_PIN 3             ///< Increment setpoint button
+#define LAB52_BUTTON_DOWN_PIN 4           ///< Decrement setpoint button
+#define LAB52_LED_RED_PIN 10              ///< Red LED output
+#define LAB52_LED_GREEN_PIN 11            ///< Green LED output
+#define LAB52_LED_BLUE_PIN 12             ///< Blue LED output
 
-// Encoder pins
-#define LAB52_ENCODER_PIN_A 2           ///< Encoder channel A (interrupt)
-#define LAB52_ENCODER_PIN_B 3           ///< Encoder channel B (interrupt)
-#define LAB52_ENCODER_PPR 20            ///< Pulses per revolution
+#define LAB52_START_SETPOINT_C 25.0f      ///< Default target temperature
+#define LAB52_STEP_SETPOINT_C 0.5f        ///< Button step size in Celsius
+#define LAB52_LED_BAND_C 1.0f             ///< +/- zone for LED color changes
+#define LAB52_BTN_DEBOUNCE_MS 100         ///< Button debounce interval
+#define LAB52_LCD_REFRESH_PERIOD_MS 200   ///< LCD refresh interval
+#define LAB52_TELEMETRY_PERIOD_MS 200     ///< StdIO/Plotter log period
+#define LAB52_LOOP_DELAY_MS 20            ///< Main loop delay to limit CPU load
 
-// Control parameters
-#define LAB52_SETPOINT_DEFAULT 100.0f   ///< Default setpoint (RPM)
-#define LAB52_SETPOINT_MIN 0.0f         ///< Min RPM
-#define LAB52_SETPOINT_MAX 300.0f       ///< Max RPM
-#define LAB52_SETPOINT_STEP 10.0f       ///< Step for UP/DOWN
-
-// PID parameters (initial tuning)
-#define LAB52_PID_KP_DEFAULT 2.0f       ///< Proportional gain
-#define LAB52_PID_KI_DEFAULT 0.5f       ///< Integral gain
-#define LAB52_PID_KD_DEFAULT 0.1f       ///< Derivative gain
-#define LAB52_PID_OUTPUT_MIN 0.0f       ///< Min PID output
-#define LAB52_PID_OUTPUT_MAX 255.0f     ///< Max PID output (PWM)
-
-// ON-OFF parameters (for comparison)
-#define LAB52_ONOFF_HYSTERESIS 10.0f    ///< Hysteresis for ON-OFF (±10 RPM)
-
-// Update periods
-#define LAB52_CONTROL_PERIOD_MS 50      ///< Control loop period (20 Hz)
-#define LAB52_LCD_UPDATE_PERIOD_MS 500  ///< LCD update period
-#define LAB52_PLOTTER_PERIOD_MS 100     ///< Serial plotter period
-
-// Buttons
-#define LAB52_BUTTON_UP_PIN 6           ///< UP button
-#define LAB52_BUTTON_DOWN_PIN 5         ///< DOWN button
-#define LAB52_BUTTON_MODE_PIN 4         ///< Mode switch button
-
-// Command buffer
-#define LAB52_COMMAND_BUFFER_SIZE 64    ///< Serial command buffer
+#define LAB52_PID_KP 10.0                 ///< Proportional gain
+#define LAB52_PID_KI 2.0                  ///< Integral gain
+#define LAB52_PID_KD 1.0                  ///< Derivative gain
+#define LAB52_PID_SAMPLE_MS 100           ///< PID compute interval
+#define LAB52_PID_OUTPUT_MIN 0            ///< Minimum PWM value
+#define LAB52_PID_OUTPUT_MAX 255          ///< Maximum PWM value
 
 // ============================================================================
-// Lab 6.1 Configuration - Finite State Machine (Button-LED)
+// Lab 6.1 Configuration - FSM LED Toggle with Button
 // ============================================================================
-// Hardware pins
-#define LAB61_BUTTON_PIN 6              ///< Input button pin
-#define LAB61_LED_RED_PIN 10            ///< Red LED pin
-#define LAB61_LED_GREEN_PIN 11          ///< Green LED pin
-#define LAB61_LED_BLUE_PIN 12           ///< Blue LED pin
-
-// FSM timing
-#define LAB61_DEBOUNCE_MS 50            ///< Button debounce time
-#define LAB61_REPORT_PERIOD_MS 1000     ///< State report period
-#define LAB61_BLINK_PERIOD_MS 500       ///< LED blink period
-
-// Command buffer
-#define LAB61_COMMAND_BUFFER_SIZE 64    ///< Serial command buffer
+#define LAB61_LED_PIN 13                  ///< LED output pin
+#define LAB61_BUTTON_PIN 2                ///< Momentary button pin (active LOW)
+#define LAB61_STATE_HOLD_MS 100           ///< State dwell time (ms)
+#define LAB61_DEBOUNCE_MS 60              ///< Button debounce interval (ms)
 
 // ============================================================================
-// Lab 6.2 Configuration - Finite State Machine (Traffic Light)
+// Lab 6.2 Configuration - Traffic Light FSM (North/East)
 // ============================================================================
-// Traffic light LED pins
-#define LAB62_LED_RED_PIN 10            ///< Red light pin
-#define LAB62_LED_YELLOW_PIN 11         ///< Yellow light pin
-#define LAB62_LED_GREEN_PIN 12          ///< Green light pin
+#define LAB62_NORTH_PIN 20                ///< North direction button/input (Wokwi: SDA pin)
+#define LAB62_EAST_PIN 21                 ///< East direction button/input (Wokwi: SCL pin)
 
-// Timing for each state (in milliseconds)
-#define LAB62_GREEN_DURATION_MS 5000    ///< Green light duration
-#define LAB62_YELLOW_DURATION_MS 2000   ///< Yellow light duration
-#define LAB62_RED_DURATION_MS 5000      ///< Red light duration
+#define LAB62_EAST_RED_PIN 5
+#define LAB62_EAST_YELLOW_PIN 6
+#define LAB62_EAST_GREEN_PIN 7
+#define LAB62_NORTH_RED_PIN 8
+#define LAB62_NORTH_YELLOW_PIN 9
+#define LAB62_NORTH_GREEN_PIN 10
 
-// Control
-#define LAB62_BUTTON_PIN 6              ///< Button for manual control
-#define LAB62_REPORT_PERIOD_MS 1000     ///< State report period
+#define LAB62_STATE_GO_N 0
+#define LAB62_STATE_WAIT_N 1
+#define LAB62_STATE_GO_E 2
+#define LAB62_STATE_WAIT_E 3
 
-// Command buffer
-#define LAB62_COMMAND_BUFFER_SIZE 64    ///< Serial command buffer
+#define LAB62_GO_N_OUTPUT 0b100001        ///< ER EY EG NR NY NG bits
+#define LAB62_WAIT_N_OUTPUT 0b010001
+#define LAB62_GO_E_OUTPUT 0b001100
+#define LAB62_WAIT_E_OUTPUT 0b001010
 
-// ============================================================================
-// Lab 7.1 Configuration - I²C Communication (Two MCUs)
-// ============================================================================
-// I²C Configuration
-#define LAB71_I2C_ADDRESS 0x08          ///< I²C slave address for MCU1
-#define LAB71_I2C_CLOCK 100000          ///< I²C clock speed (100 kHz)
-
-// HC-SR04 Ultrasonic Sensor (connected to MCU1)
-#define LAB71_ULTRASONIC_TRIG_PIN 7     ///< Trigger pin
-#define LAB71_ULTRASONIC_ECHO_PIN 8     ///< Echo pin
-#define LAB71_ULTRASONIC_MAX_DISTANCE 400  ///< Max distance in cm
-#define LAB71_ULTRASONIC_TIMEOUT_US 30000  ///< Timeout in microseconds
-
-// Data packet format
-#define LAB71_PACKET_HEADER 0xAA        ///< Packet start marker
-#define LAB71_PACKET_FOOTER 0x55        ///< Packet end marker
-#define LAB71_PACKET_SIZE 8             ///< Total packet size in bytes
-
-// MCU2 (Master) timing
-#define LAB71_POLL_PERIOD_MS 500        ///< How often to request data
-#define LAB71_MEASUREMENT_INTERVAL_MS 100  ///< MCU1 measurement interval
-
-// Report periods
-#define LAB71_REPORT_PERIOD_MS 1000     ///< Status report period
-
-// ============================================================================
-// Lab 7.2 Configuration - Serial Protocol Communication
-// ============================================================================
-// Serial configuration
-#define LAB72_SERIAL_BAUD 9600          ///< Serial baud rate
-#define LAB72_PACKET_START 0x7E         ///< Start marker '~'
-#define LAB72_PACKET_END 0x7F           ///< End marker (DEL)
-#define LAB72_MAX_PAYLOAD_SIZE 32       ///< Max payload bytes
-
-// Device IDs
-#define LAB72_MCU1_ID 0x01              ///< MCU1 device ID
-#define LAB72_MCU2_ID 0x02              ///< MCU2 device ID
-
-// Packet types
-#define LAB72_CMD_REQUEST_DATA 0x10     ///< Request sensor data
-#define LAB72_CMD_RESPONSE_DATA 0x11    ///< Response with data
-#define LAB72_CMD_SET_LED 0x20          ///< Set LED state command
-#define LAB72_CMD_ACK 0xF0              ///< Acknowledgment
-#define LAB72_CMD_NACK 0xFF             ///< Negative acknowledgment
-
-// Timing
-#define LAB72_AUTO_SEND_PERIOD_MS 2000  ///< Auto-send period (MCU1)
-#define LAB72_RESPONSE_TIMEOUT_MS 1000  ///< Response timeout
-
-// HC-SR04 for Lab 7.2 (can reuse Lab 7.1 config or define new)
-#define LAB72_ULTRASONIC_TRIG_PIN 7
-#define LAB72_ULTRASONIC_ECHO_PIN 8
-
-// ============================================================================
-// Lab 7.3 Configuration - MQTT Internet Communication (ESP32)
-// ============================================================================
-// WiFi Configuration
-#define LAB73_WIFI_SSID "Your_WiFi_SSID"        ///< WiFi network name
-#define LAB73_WIFI_PASSWORD "Your_WiFi_Password" ///< WiFi password
-#define LAB73_WIFI_TIMEOUT_MS 10000             ///< WiFi connection timeout
-
-// MQTT Configuration (ThingsBoard or HiveMQ)
-#define LAB73_MQTT_BROKER "demo.thingsboard.io" ///< MQTT broker address
-#define LAB73_MQTT_PORT 1883                    ///< MQTT broker port
-#define LAB73_MQTT_CLIENT_ID "ESP32_IOT_Client" ///< MQTT client ID
-#define LAB73_MQTT_USER "YOUR_ACCESS_TOKEN"     ///< ThingsBoard access token
-#define LAB73_MQTT_PASSWORD ""                  ///< MQTT password (if needed)
-
-// MQTT Topics
-#define LAB73_TOPIC_TELEMETRY "v1/devices/me/telemetry" ///< Telemetry topic
-#define LAB73_TOPIC_ATTRIBUTES "v1/devices/me/attributes" ///< Attributes topic
-#define LAB73_TOPIC_RPC_REQUEST "v1/devices/me/rpc/request/+" ///< RPC request topic
-#define LAB73_TOPIC_RPC_RESPONSE "v1/devices/me/rpc/response/" ///< RPC response topic
-
-// Sensor Configuration (DHT22 or similar)
-#define LAB73_DHT_PIN 4                         ///< DHT sensor pin
-#define LAB73_DHT_TYPE DHT22                    ///< DHT sensor type
-
-// Actuator Configuration (LED)
-#define LAB73_LED_PIN 2                         ///< Built-in LED or external
-#define LAB73_RELAY_PIN 23                      ///< Relay control pin
-
-// Timing
-#define LAB73_TELEMETRY_INTERVAL_MS 5000        ///< Send telemetry every 5s
-#define LAB73_RECONNECT_INTERVAL_MS 5000        ///< Reconnect attempt interval
+#define LAB62_GO_N_TIME_MS 3000
+#define LAB62_WAIT_N_TIME_MS 500
+#define LAB62_GO_E_TIME_MS 3000
+#define LAB62_WAIT_E_TIME_MS 500
 
 #endif

@@ -10,51 +10,48 @@
 #include "config.h"
 
 #include <Arduino.h>
-#include "dd_serial.hpp"
+#include "CustomSTDIO.h"
 
 #include "lab1/lab1_1.hpp"
 #include "lab1/lab1_2.hpp"
 #include "lab2/lab2_1.hpp"
 #include "lab3/lab3_1.hpp"
-#include "lab3/lab3_2.hpp"
 #include "lab4/lab4_1.hpp"
 #include "lab4/lab4_2.hpp"
-// #include "lab5/lab5_1.hpp"
-// #include "lab5/lab5_2.hpp"
-// #include "lab6/lab6_1.hpp"
-// #include "lab6/lab6_2.hpp"
-// #include "lab7/lab7_1_mcu1.hpp"
-// #include "lab7/lab7_1_mcu2.hpp"
-// #include "lab7/lab7_2_mcu1.hpp"
-// #include "lab7/lab7_2_mcu2.hpp"
-// #include "lab7/lab7_3.hpp"
+#include "lab5/lab5_1.hpp"
+#include "lab5/lab5_2.hpp"
+#include "lab6/lab6_1.hpp"
+#include "lab6/lab6_2.hpp"
 
-// Global state
-namespace {
-  LabSelection g_currentLab = DEFAULT_LAB;
-  bool g_labInitialized = false;
-}
+static LabSelection g_currentLab = DEFAULT_LAB;
+static bool g_labInitialized = false;
 
 const char* labToString(LabSelection lab) {
   switch (lab) {
-    case LabSelection::NONE: return "Idle";
-    case LabSelection::LAB1_1: return "LAB1.1";
-    case LabSelection::LAB1_2: return "LAB1.2";
-    case LabSelection::LAB2_1: return "LAB2.1";
-    case LabSelection::LAB3_1: return "LAB3.1";
-    case LabSelection::LAB3_2: return "LAB3.2";
-    case LabSelection::LAB4_1: return "LAB4.1";
-    case LabSelection::LAB4_2: return "LAB4.2";
-    case LabSelection::LAB5_1: return "LAB5.1";
-    case LabSelection::LAB5_2: return "LAB5.2";
-    case LabSelection::LAB6_1: return "LAB6.1";
-    case LabSelection::LAB6_2: return "LAB6.2";
-    case LabSelection::LAB7_1_MCU1: return "LAB7.1_MCU1";
-    case LabSelection::LAB7_1_MCU2: return "LAB7.1_MCU2";
-    case LabSelection::LAB7_2_MCU1: return "LAB7.2_MCU1";
-    case LabSelection::LAB7_2_MCU2: return "LAB7.2_MCU2";
-    case LabSelection::LAB7_3: return "LAB7.3";
-    default: return "?";
+    case LabSelection::NONE:
+      return "Idle";
+    case LabSelection::LAB1_1:
+      return "LAB1.1";
+    case LabSelection::LAB1_2:
+      return "LAB1.2";
+    case LabSelection::LAB3_1:
+      return "LAB3.1";
+    case LabSelection::LAB2_1:
+      return "LAB2.1";
+    case LabSelection::LAB4_1:
+      return "LAB4.1";
+    case LabSelection::LAB4_2:
+      return "LAB4.2";
+    case LabSelection::LAB5_1:
+      return "LAB5.1";
+    case LabSelection::LAB5_2:
+      return "LAB5.2";
+    case LabSelection::LAB6_1:
+      return "LAB6.1";
+    case LabSelection::LAB6_2:
+      return "LAB6.2";
+    default:
+      return "?";
   }
 }
 
@@ -76,8 +73,8 @@ void appManagerSetup() {
   int labCode = LAB_SELECTED_CODE;
   
   if (firstRun) {
-    SerialBegin();
-    delay(1000);
+    StdioSerialSetup();
+    delay(500);
     
     LabSelection newLab = g_currentLab;
     switch (labCode) {
@@ -86,69 +83,54 @@ void appManagerSetup() {
       case 12: newLab = LabSelection::LAB1_2; break;
       case 21: newLab = LabSelection::LAB2_1; break;
       case 31: newLab = LabSelection::LAB3_1; break;
-      case 32: newLab = LabSelection::LAB3_2; break;
       case 41: newLab = LabSelection::LAB4_1; break;
       case 42: newLab = LabSelection::LAB4_2; break;
       case 51: newLab = LabSelection::LAB5_1; break;
       case 52: newLab = LabSelection::LAB5_2; break;
       case 61: newLab = LabSelection::LAB6_1; break;
       case 62: newLab = LabSelection::LAB6_2; break;
-      case 71: newLab = LabSelection::LAB7_1_MCU1; break;
-      case 72: newLab = LabSelection::LAB7_1_MCU2; break;
-      case 73: newLab = LabSelection::LAB7_2_MCU1; break;
-      case 74: newLab = LabSelection::LAB7_2_MCU2; break;
-      case 75: newLab = LabSelection::LAB7_3; break;
-      default: newLab = LabSelection::NONE; break;
+      default: newLab = LabSelection::LAB1_1; break;
     }
     g_currentLab = newLab;
     
-    Serial.println();
-    Serial.print(F(">> Starting: LAB"));
-    delay(10);
-    Serial.println(labCode);
-    delay(10);
-    Serial.println();
+    printf("\r\n>> Starting: LAB%d\r\n\r\n", labCode);
     
     firstRun = false;
   }
   
   if (g_labInitialized) return;
   
-  Serial.print(F("Init: LAB"));
-  delay(10);
-  Serial.println(labCode);
-  delay(10);
+  printf("Init: LAB%d\r\n", labCode);
   
   switch (g_currentLab) {
     case LabSelection::NONE: 
-      Serial.println(F("Idle."));
+      printf("Idle.\r\n");
       break;
-    case LabSelection::LAB1_1: setup_lab1_1(); break;
-    case LabSelection::LAB1_2: setup_lab1_2(); break;
-    case LabSelection::LAB2_1: setup_lab2_1(); break;
-    case LabSelection::LAB3_1: setup_lab3_1(); break;
-    case LabSelection::LAB3_2: setup_lab3_2(); break;
+    case LabSelection::LAB1_1:
+      setup_lab1_1();
+      break;
+    case LabSelection::LAB1_2:
+      setup_lab1_2();
+      break;
+    case LabSelection::LAB2_1:
+      setup_lab2_1();
+      break;
+    case LabSelection::LAB3_1:
+      setup_lab3_1();
+      break;
     case LabSelection::LAB4_1: setup_lab4_1(); break;
     case LabSelection::LAB4_2: setup_lab4_2(); break;
-    case LabSelection::LAB5_1:
-    case LabSelection::LAB5_2:
-    case LabSelection::LAB6_1:
-    case LabSelection::LAB6_2:
-    case LabSelection::LAB7_1_MCU1:
-    case LabSelection::LAB7_1_MCU2:
-    case LabSelection::LAB7_2_MCU1:
-    case LabSelection::LAB7_2_MCU2:
-    case LabSelection::LAB7_3:
-      Serial.println(F("Not impl."));
-      break;
+    case LabSelection::LAB5_1: setup_lab5_1(); break;
+    case LabSelection::LAB5_2: setup_lab5_2(); break;
+    case LabSelection::LAB6_1: setup_lab6_1(); break;
+    case LabSelection::LAB6_2: setup_lab6_2(); break;
     default:
-      Serial.println(F("Unknown!"));
+      printf("Unknown!\r\n");
       break;
   }
   
   g_labInitialized = true;
-  Serial.println(F("Ready."));
-  Serial.println();
+  printf("Ready.\r\n\r\n");
 }
 
 void appManagerLoop() {
@@ -157,24 +139,24 @@ void appManagerLoop() {
     case LabSelection::NONE: 
       delay(100);
       break;
-    case LabSelection::LAB1_1: loop_lab1_1(); break;
-    case LabSelection::LAB1_2: loop_lab1_2(); break;
-    case LabSelection::LAB2_1: loop_lab2_1(); break;
-    case LabSelection::LAB3_1: loop_lab3_1(); break;
-    case LabSelection::LAB3_2: loop_lab3_2(); break;
+    case LabSelection::LAB1_1:
+      loop_lab1_1();
+      break;
+    case LabSelection::LAB1_2:
+      loop_lab1_2();
+      break;
+    case LabSelection::LAB2_1:
+      loop_lab2_1();
+      break;
+    case LabSelection::LAB3_1:
+      loop_lab3_1();
+      break;
     case LabSelection::LAB4_1: loop_lab4_1(); break;
     case LabSelection::LAB4_2: loop_lab4_2(); break;
-    case LabSelection::LAB5_1:
-    case LabSelection::LAB5_2:
-    case LabSelection::LAB6_1:
-    case LabSelection::LAB6_2:
-    case LabSelection::LAB7_1_MCU1:
-    case LabSelection::LAB7_1_MCU2:
-    case LabSelection::LAB7_2_MCU1:
-    case LabSelection::LAB7_2_MCU2:
-    case LabSelection::LAB7_3:
-      delay(100);
-      break;
+    case LabSelection::LAB5_1: loop_lab5_1(); break;
+    case LabSelection::LAB5_2: loop_lab5_2(); break;
+    case LabSelection::LAB6_1: loop_lab6_1(); break;
+    case LabSelection::LAB6_2: loop_lab6_2(); break;
     default:
       delay(100);
       break;
