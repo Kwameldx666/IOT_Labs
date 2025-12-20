@@ -31,6 +31,11 @@ void printFloat(const char* label, float value, const char* suffix) {
 	printf("%s%s%s\r\n", label, buf, suffix);
 }
 
+void stdioFlush() {
+	fflush(stdout);
+	Serial.flush();
+}
+
 bool stdioHasData() {
 	return Serial.available() > 0;
 }

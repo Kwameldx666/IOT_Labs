@@ -5,59 +5,99 @@
 #include "CustomSTDIO.h"
 #include "config.h"
 
-namespace {
+enum class TrafficPhase { GoNorth = 0, WaitNorth, GoEast, WaitEast };
 
-struct State {
-	unsigned long out;
-	unsigned long timeMs;
-	unsigned long next[4];
+struct TrafficState {
+	bool eastRed;
+	bool eastYellow;
+	bool eastGreen;
+	bool northRed;
+	bool northYellow;
+	bool northGreen;
+	unsigned long holdMs;
 };
 
-constexpr State kFsm[] = {
-		{LAB62_GO_N_OUTPUT, LAB62_GO_N_TIME_MS,
-		 {LAB62_STATE_GO_N, LAB62_STATE_WAIT_N, LAB62_STATE_WAIT_N, LAB62_STATE_WAIT_N}},
-		{LAB62_WAIT_N_OUTPUT, LAB62_WAIT_N_TIME_MS,
-		 {LAB62_STATE_GO_E, LAB62_STATE_GO_E, LAB62_STATE_GO_E, LAB62_STATE_GO_E}},
-		{LAB62_GO_E_OUTPUT, LAB62_GO_E_TIME_MS,
-		 {LAB62_STATE_GO_E, LAB62_STATE_GO_E, LAB62_STATE_WAIT_E, LAB62_STATE_WAIT_E}},
-		{LAB62_WAIT_E_OUTPUT, LAB62_WAIT_E_TIME_MS,
-		 {LAB62_STATE_GO_N, LAB62_STATE_GO_N, LAB62_STATE_GO_N, LAB62_STATE_GO_N}},
+struct ButtonDebounce {
+	bool stablePressed;
+	bool lastRaw;
+	unsigned long lastChangeMs;
 };
 
-int g_state = LAB62_STATE_GO_N;
+// Explicit outputs per phase to avoid bit masks.
+static const TrafficState kStates[] = {
+		// GoNorth: North green, East red
+		{true, false, false, false, false, true, LAB62_GO_N_TIME_MS},
+		// WaitNorth: North yellow, East red
+		{true, false, false, false, true, false, LAB62_WAIT_N_TIME_MS},
+		// GoEast: East green, North red
+		{false, false, true, true, false, false, LAB62_GO_E_TIME_MS},
+		// WaitEast: East yellow, North red
+		{false, true, false, true, false, false, LAB62_WAIT_E_TIME_MS},
+};
 
-const char* stateName(int state) {
+static TrafficPhase g_state = TrafficPhase::GoNorth;
+static ButtonDebounce g_northBtn{};
+static ButtonDebounce g_eastBtn{};
+
+static const char* stateName(TrafficPhase state) {
 	switch (state) {
-		case LAB62_STATE_GO_N: return "goN";
-		case LAB62_STATE_WAIT_N: return "waitN";
-		case LAB62_STATE_GO_E: return "goE";
-		case LAB62_STATE_WAIT_E: return "waitE";
+		case TrafficPhase::GoNorth: return "goN";
+		case TrafficPhase::WaitNorth: return "waitN";
+		case TrafficPhase::GoEast: return "goE";
+		case TrafficPhase::WaitEast: return "waitE";
 		default: return "?";
 	}
 }
 
-int readInput() {
-	const int north = digitalRead(LAB62_NORTH_PIN) ? 0b10 : 0;
-	const int east = digitalRead(LAB62_EAST_PIN) ? 0b01 : 0;
-	return north | east;
+static bool isNorthPressed() {
+	// Buttons use pull-up, so LOW means pressed.
+	return digitalRead(LAB62_NORTH_PIN) == LOW;
 }
 
-void setOutput(unsigned long out) {
-	digitalWrite(LAB62_EAST_RED_PIN, (out & (1 << 5)) ? HIGH : LOW);
-	digitalWrite(LAB62_EAST_YELLOW_PIN, (out & (1 << 4)) ? HIGH : LOW);
-	digitalWrite(LAB62_EAST_GREEN_PIN, (out & (1 << 3)) ? HIGH : LOW);
-	digitalWrite(LAB62_NORTH_RED_PIN, (out & (1 << 2)) ? HIGH : LOW);
-	digitalWrite(LAB62_NORTH_YELLOW_PIN, (out & (1 << 1)) ? HIGH : LOW);
-	digitalWrite(LAB62_NORTH_GREEN_PIN, (out & (1 << 0)) ? HIGH : LOW);
+static bool isEastPressed() {
+	return digitalRead(LAB62_EAST_PIN) == LOW;
 }
 
-}  // namespace
+static void initButton(ButtonDebounce& b, bool rawPressed) {
+	b.stablePressed = rawPressed;
+	b.lastRaw = rawPressed;
+	b.lastChangeMs = millis();
+}
+
+static bool readButtonEdge(ButtonDebounce& b, uint8_t pin) {
+	const bool rawPressed = digitalRead(pin) == LOW;
+	const unsigned long now = millis();
+
+	if (rawPressed != b.lastRaw) {
+		b.lastRaw = rawPressed;
+		b.lastChangeMs = now;
+	}
+
+	if ((now - b.lastChangeMs) >= BUTTON_DEBOUNCE_MS && rawPressed != b.stablePressed) {
+		b.stablePressed = rawPressed;
+		if (b.stablePressed) {
+			return true;  // rising edge (button pressed)
+		}
+	}
+
+	return false;
+}
+
+static void applyOutput(const TrafficState& out) {
+	digitalWrite(LAB62_EAST_RED_PIN, out.eastRed ? HIGH : LOW);
+	digitalWrite(LAB62_EAST_YELLOW_PIN, out.eastYellow ? HIGH : LOW);
+	digitalWrite(LAB62_EAST_GREEN_PIN, out.eastGreen ? HIGH : LOW);
+
+	digitalWrite(LAB62_NORTH_RED_PIN, out.northRed ? HIGH : LOW);
+	digitalWrite(LAB62_NORTH_YELLOW_PIN, out.northYellow ? HIGH : LOW);
+	digitalWrite(LAB62_NORTH_GREEN_PIN, out.northGreen ? HIGH : LOW);
+}
 
 void setup_lab6_2() {
 	StdioSerialSetup();
 
-	pinMode(LAB62_NORTH_PIN, INPUT);
-	pinMode(LAB62_EAST_PIN, INPUT);
+	pinMode(LAB62_NORTH_PIN, INPUT_PULLUP);
+	pinMode(LAB62_EAST_PIN, INPUT_PULLUP);
 
 	pinMode(LAB62_EAST_RED_PIN, OUTPUT);
 	pinMode(LAB62_EAST_YELLOW_PIN, OUTPUT);
@@ -67,26 +107,53 @@ void setup_lab6_2() {
 	pinMode(LAB62_NORTH_YELLOW_PIN, OUTPUT);
 	pinMode(LAB62_NORTH_GREEN_PIN, OUTPUT);
 
-	setOutput(kFsm[g_state].out);
+	initButton(g_northBtn, isNorthPressed());
+	initButton(g_eastBtn, isEastPressed());
+
+	applyOutput(kStates[static_cast<int>(g_state)]);
 	printf("[Lab6.2] Traffic light FSM ready.\r\n");
 	printf("North btn: D%d, East btn: D%d\r\n", LAB62_NORTH_PIN, LAB62_EAST_PIN);
 	printf("[Lab6.2] State -> %s\r\n", stateName(g_state));
 }
 
 void loop_lab6_2() {
-	const State& current = kFsm[g_state];
+	const TrafficState& current = kStates[static_cast<int>(g_state)];
 
-	setOutput(current.out);
-	delay(current.timeMs);
+	applyOutput(current);
 
-	const int input = readInput();  // bits: north<<1 | east
-	const int next = current.next[input & 0b11];
+	// Poll buttons frequently during the dwell time so short presses are not missed.
+	const unsigned long startMs = millis();
+	bool northEdge = false;
+	bool eastEdge = false;
+	while (millis() - startMs < current.holdMs) {
+		northEdge |= readButtonEdge(g_northBtn, LAB62_NORTH_PIN);
+		eastEdge |= readButtonEdge(g_eastBtn, LAB62_EAST_PIN);
+		delay(5);
+	}
 
-	printf("[Lab6.2] Hold %s | IN north=%d east=%d\r\n", stateName(g_state),
-				 (input & 0b10) ? 1 : 0, (input & 0b01) ? 1 : 0);
+	printf("[Lab6.2] Hold %s | IN north=%d east=%d\r\n",
+				 stateName(g_state), g_northBtn.stablePressed ? 1 : 0,
+				 g_eastBtn.stablePressed ? 1 : 0);
+
+	TrafficPhase next = g_state;
+	switch (g_state) {
+		case TrafficPhase::GoNorth:
+			if (northEdge || eastEdge) next = TrafficPhase::WaitNorth;
+			break;
+		case TrafficPhase::WaitNorth:
+			next = TrafficPhase::GoEast;
+			break;
+		case TrafficPhase::GoEast:
+			if (northEdge) next = TrafficPhase::WaitEast;
+			break;
+		case TrafficPhase::WaitEast:
+			next = TrafficPhase::GoNorth;
+			break;
+	}
 
 	if (next != g_state) {
 		g_state = next;
+		applyOutput(kStates[static_cast<int>(g_state)]);
 		printf("[Lab6.2] State -> %s\r\n", stateName(g_state));
 	}
 }

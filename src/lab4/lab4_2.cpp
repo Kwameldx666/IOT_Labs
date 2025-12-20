@@ -5,9 +5,7 @@
 #include "MotorDriver.h"
 #include "relay_driver.hpp"
 
-static RelayDriver g_relay(LAB41_LIGHT_RELAY_PIN, true);
 static bool g_ledOn = false;
-static int g_currentSpeed = 0;
 static bool g_helpPrinted = false;
 
 static void showLines(const char* first, const char* second) {
@@ -26,9 +24,9 @@ static void updateMotorLine(const char* text) {
 
 static void controlLed(bool turnOn) {
 	if (turnOn) {
-		g_relay.turnOn();
+		relay_on();
 	} else {
-		g_relay.turnOff();
+		relay_off();
 	}
 	showLines(turnOn ? "Led is ON" : "Led is OFF", " ");
 	g_ledOn = turnOn;
@@ -36,28 +34,25 @@ static void controlLed(bool turnOn) {
 }
 
 static void controlMotor(int percent) {
-	percent = constrain(percent, -100, 100);
-	g_currentSpeed = percent;
-
-	const int pwm = map(percent, -100, 100, -255, 255);
-	setSpeed(pwm);
+	motorSetPercent(percent);
+	const int appliedPercent = motorGetPercent();
 
 	char line2[17];
-	if (percent == 0) {
+	if (appliedPercent == 0) {
 		snprintf(line2, sizeof(line2), "Motor is OFF     ");
 	} else {
-		snprintf(line2, sizeof(line2), "Motor Speed:%4d%%", percent);
+		snprintf(line2, sizeof(line2), "Motor Speed:%4d%%", appliedPercent);
 	}
 	updateMotorLine(line2);
-	printf("[Lab4.2] Motor speed set to %d%%\r\n", g_currentSpeed);
+	printf("[Lab4.2] Motor speed set to %d%%\r\n", appliedPercent);
 }
 
 void setup_lab4_2() {
 	StdioSerialSetup();
 	lcdSetup();
 
-	motorSetup(LAB42_MOTOR_ENABLE_PIN, LAB42_MOTOR_PIN1, LAB42_MOTOR_PIN2);
-	g_relay.begin();
+	motorBegin(LAB42_MOTOR_ENABLE_PIN, LAB42_MOTOR_PIN1, LAB42_MOTOR_PIN2);
+	relay_init(LAB41_LIGHT_RELAY_PIN, true);
 
 	lcdPrint("System Ready");
 	controlMotor(0);
@@ -89,7 +84,7 @@ void loop_lab4_2() {
 		controlMotor(value);
 	} else if (command.equalsIgnoreCase("status")) {
 		printf("[Lab4.2] LED: %s | Motor: %d%%\n", g_ledOn ? "ON" : "OFF",
-					 g_currentSpeed);
+					 motorGetPercent());
 	} else {
 		clearScreen();
 		lcdPrint("Unknown cmd");

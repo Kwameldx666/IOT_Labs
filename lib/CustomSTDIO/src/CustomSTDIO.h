@@ -8,5 +8,6 @@ void StdioSerialSetup();
 void printFloat(const char* label, float value, const char* suffix);
 bool stdioHasData();
 String stdioGetString();
+void stdioFlush();
 
 #endif

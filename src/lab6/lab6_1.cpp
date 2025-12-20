@@ -6,7 +6,6 @@
 #include "DriverLed.h"
 #include "config.h"
 
-namespace {
 
 enum class LedState : uint8_t { Off = 0, On = 1 };
 
@@ -32,7 +31,7 @@ constexpr size_t idx(LedState state) {
 }
 
 bool readButtonPress() {
-	const bool rawPressed = digitalRead(LAB61_BUTTON_PIN) == HIGH;  // active HIGH (external pulldown)
+	const bool rawPressed = digitalRead(LAB61_BUTTON_PIN) == HIGH;  // active HIGH per wiring (pulldown)
 	const unsigned long now = millis();
 
 	if (rawPressed != g_lastRawPressed) {
@@ -55,15 +54,14 @@ void applyOutput(LedState state) {
 	changeLedState(LAB61_LED_PIN, kFsm[idx(state)].output);
 }
 
-}  // namespace
 
 void setup_lab6_1() {
 	StdioSerialSetup();
 
-	pinMode(LAB61_BUTTON_PIN, INPUT);  // external pulldown on schematic
+	pinMode(LAB61_BUTTON_PIN, INPUT);  
 	ledSetup(LAB61_LED_PIN);
 
-	g_lastRawPressed = digitalRead(LAB61_BUTTON_PIN) == LOW;
+	g_lastRawPressed = digitalRead(LAB61_BUTTON_PIN) == HIGH;
 	g_stablePressed = g_lastRawPressed;
 	g_lastDebounceMs = millis();
 
@@ -72,8 +70,6 @@ void setup_lab6_1() {
 	printf("[Lab6.1] FSM LED toggle ready.\r\n");
 	printf("LED on D%d, button on D%d (active HIGH, debounce %d ms).\r\n",
 				 LAB61_LED_PIN, LAB61_BUTTON_PIN, LAB61_DEBOUNCE_MS);
-	printf("[Lab6.1] State -> %s\r\n",
-				 g_state == LedState::On ? "ON" : "OFF");
 }
 
 void loop_lab6_1() {

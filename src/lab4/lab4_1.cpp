@@ -5,6 +5,7 @@
 #include "relay_driver.hpp"
 
 static RelayDriver g_relay(LAB41_LIGHT_RELAY_PIN, true);
+
 static bool g_ledOn = false;
 
 static void controlLed(bool turnOn) {

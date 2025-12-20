@@ -107,4 +107,55 @@ private:
 	void updateHardware();
 };
 
+// ----------------------------------------------------------------------------
+// C-style API for single relay usage (pure C interface for labs)
+// ----------------------------------------------------------------------------
+
+/**
+ * @brief Initialize relay with given pin and polarity (activeHigh = true by default)
+ */
+void relay_init(uint8_t pin, bool activeHigh = true);
+
+/**
+ * @brief Turn relay on
+ */
+void relay_on();
+
+/**
+ * @brief Turn relay off
+ */
+void relay_off();
+
+/**
+ * @brief Toggle relay state
+ */
+void relay_toggle();
+
+/**
+ * @brief Check if relay is currently on
+ */
+bool relay_is_on();
+
+/**
+ * @brief Get current relay state
+ */
+RelayState relay_state();
+
+// ----------------------------------------------------------------------------
+// C-style API with explicit handle (multi-relay)
+// ----------------------------------------------------------------------------
+struct RelayHandle {
+	uint8_t pin;
+	bool activeHigh;
+	RelayState state;
+	bool initialized;
+};
+
+void relay_handle_init(RelayHandle* handle, uint8_t pin, bool activeHigh = true);
+void relay_handle_on(RelayHandle* handle);
+void relay_handle_off(RelayHandle* handle);
+void relay_handle_toggle(RelayHandle* handle);
+bool relay_handle_is_on(const RelayHandle* handle);
+RelayState relay_handle_state(const RelayHandle* handle);
+
 #endif // RELAY_DRIVER_HPP

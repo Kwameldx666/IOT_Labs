@@ -9,55 +9,45 @@
 #include "config.h"
 #include "relay_driver.hpp"
 
-namespace {
+// Temperature bands around setpoint
+enum ThermalZone { THERMAL_COLD = 0, THERMAL_NORMAL, THERMAL_HOT };
 
-// Три состояния температурной зоны относительно текущей уставки.
-enum class ThermalZone { Cold, Normal, Hot };
+static RelayHandle g_fanRelay = {0, true, RelayState::OFF, false};
+static RelayHandle g_alarmRelay = {0, true, RelayState::OFF, false};
 
-static RelayDriver g_fanRelay(LAB51_MOTOR_RELAY_PIN, true);
-static RelayDriver g_alarmRelay(LAB51_ALARM_RELAY_PIN, true);
-
-// Рабочие переменные контроллера (уставка, температура, флаги).
 static float g_setPointC = LAB51_START_SETPOINT_C;
 static float g_currentTempC = LAB51_START_SETPOINT_C;
-static ThermalZone g_zone = ThermalZone::Normal;
+static ThermalZone g_zone = THERMAL_NORMAL;
 static bool g_fanEnabled = false;
 static bool g_alarmEnabled = false;
 
-// Метки времени: антидребезг кнопок и периодические обновления.
 static unsigned long g_lastBtnUpMs = 0;
 static unsigned long g_lastBtnDownMs = 0;
 static unsigned long g_lastLcdMs = 0;
 static unsigned long g_lastTelemetryMs = 0;
 
-// Перевод значения перечисления в строку для LCD/Serial.
-const char* zoneToString(ThermalZone zone) {
+static const char* zoneToString(ThermalZone zone) {
 	switch (zone) {
-		case ThermalZone::Cold:
-			return "COLD";
-		case ThermalZone::Normal:
-			return "NORMAL";
-		case ThermalZone::Hot:
-			return "HOT";
-		default:
-			return "?";
+		case THERMAL_COLD: return "COLD";
+		case THERMAL_NORMAL: return "NORMAL";
+		case THERMAL_HOT: return "HOT";
+		default: return "?";
 	}
 }
 
-// Управление RGB-светодиодом для наглядного отображения зоны.
-void setLedState(ThermalZone zone) {
+static void setLedState(ThermalZone zone) {
 	switch (zone) {
-		case ThermalZone::Cold:
+		case THERMAL_COLD:
 			ledOff(LAB51_LED_RED_PIN);
 			ledOff(LAB51_LED_GREEN_PIN);
 			ledOn(LAB51_LED_BLUE_PIN);
 			break;
-		case ThermalZone::Normal:
+		case THERMAL_NORMAL:
 			ledOff(LAB51_LED_RED_PIN);
 			ledOn(LAB51_LED_GREEN_PIN);
 			ledOff(LAB51_LED_BLUE_PIN);
 			break;
-		case ThermalZone::Hot:
+		case THERMAL_HOT:
 			ledOn(LAB51_LED_RED_PIN);
 			ledOff(LAB51_LED_GREEN_PIN);
 			ledOff(LAB51_LED_BLUE_PIN);
@@ -65,15 +55,16 @@ void setLedState(ThermalZone zone) {
 	}
 }
 
-// Чтение датчика TMP36 и пересчёт в градусы Цельсия.
-float readTemperatureC() {
+static float readTemperatureC() {
 	const int raw = analogRead(LAB51_TMP36_PIN);
-	const float voltage = raw * (5.0f / 1023.0f);
-	return (voltage - 0.5f) * 100.0f;
+	const float voltage = raw * (LAB5_ADC_VREF / 1023.0f);
+	float tempC = LAB5_USE_LM35
+									? voltage * 100.0f                   // LM35: 10 mV/°C
+									: (voltage - 0.5f) * 100.0f;          // TMP36: offset 0.5 V
+	return tempC + LAB5_TEMP_OFFSET_C;
 }
 
-// Возвращает true, если кнопка корректно нажата и уставка изменена.
-bool tryAdjustSetPoint(int pin, unsigned long& lastTrigger, float delta) {
+static bool tryAdjustSetPoint(int pin, unsigned long& lastTrigger, float delta) {
 	const unsigned long now = millis();
 	if (digitalRead(pin) == LOW && (now - lastTrigger) >= LAB51_DEBOUNCE_MS) {
 		g_setPointC += delta;
@@ -83,19 +74,18 @@ bool tryAdjustSetPoint(int pin, unsigned long& lastTrigger, float delta) {
 	return false;
 }
 
-// Основная логика: определяем зону, вентилятор и тревогу.
-bool applyThermalLogic() {
+static bool applyThermalLogic() {
 	const float delta = g_currentTempC - g_setPointC;
 	ThermalZone newZone = g_zone;
 	bool fan = false;
 	bool alarm = false;
 
 	if (delta < -LAB51_NORMAL_RANGE_C) {
-		newZone = ThermalZone::Cold;
+		newZone = THERMAL_COLD;
 	} else if (fabsf(delta) <= LAB51_NORMAL_RANGE_C) {
-		newZone = ThermalZone::Normal;
+		newZone = THERMAL_NORMAL;
 	} else {
-		newZone = ThermalZone::Hot;
+		newZone = THERMAL_HOT;
 		fan = true;
 		alarm = (delta >= LAB51_EXTREME_DELTA_C);
 	}
@@ -111,36 +101,32 @@ bool applyThermalLogic() {
 	g_alarmEnabled = alarm;
 
 	if (g_fanEnabled) {
-		g_fanRelay.turnOn();
+		relay_handle_on(&g_fanRelay);
 	} else {
-		g_fanRelay.turnOff();
+		relay_handle_off(&g_fanRelay);
 	}
 
 	if (g_alarmEnabled) {
-		g_alarmRelay.turnOn();
+		relay_handle_on(&g_alarmRelay);
 	} else {
-		g_alarmRelay.turnOff();
+		relay_handle_off(&g_alarmRelay);
 	}
 
 	setLedState(g_zone);
 	return true;
 }
 
-// Две строки LCD: сверху уставка, снизу измерение и зона.
-void refreshLcd() {
+static void refreshLcd() {
 	lcdPrintLine(0, "SP:%5.1fC", g_setPointC);
 	lcdPrintLine(1, "T:%5.1fC %-6s", g_currentTempC, zoneToString(g_zone));
 }
 
-// Лог в Serial, соответствующий показаниям на дисплее.
-void logTelemetry() {
+static void logTelemetry() {
 	printf("[Lab5.1] T=%.1fC | SP=%.1fC | Zone=%s | Fan=%s | Alarm=%s\r\n",
 				 g_currentTempC, g_setPointC, zoneToString(g_zone),
 				 g_fanEnabled ? "ON" : "OFF",
 				 g_alarmEnabled ? "ON" : "OFF");
 }
-
-}  // namespace
 
 void setup_lab5_1() {
 	StdioSerialSetup();
@@ -153,16 +139,14 @@ void setup_lab5_1() {
 	ledSetup(LAB51_LED_RED_PIN);
 	ledSetup(LAB51_LED_GREEN_PIN);
 	ledSetup(LAB51_LED_BLUE_PIN);
-	g_zone = ThermalZone::Normal;
+	g_zone = THERMAL_NORMAL;
 	setLedState(g_zone);
 
-	// Реле по умолчанию выключены (ждём решения логики).
-	g_fanRelay.begin();
-	g_alarmRelay.begin();
-	g_fanRelay.turnOff();
-	g_alarmRelay.turnOff();
+	relay_handle_init(&g_fanRelay, LAB51_MOTOR_RELAY_PIN, true);
+	relay_handle_init(&g_alarmRelay, LAB51_ALARM_RELAY_PIN, true);
+	relay_handle_off(&g_fanRelay);
+	relay_handle_off(&g_alarmRelay);
 
-	// Первичное чтение датчика нужно, чтобы не было рывка при старте.
 	g_currentTempC = readTemperatureC();
 	applyThermalLogic();
 	refreshLcd();

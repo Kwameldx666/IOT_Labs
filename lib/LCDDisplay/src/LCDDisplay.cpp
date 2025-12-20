@@ -3,13 +3,18 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <Wire.h>
+#include <Arduino.h>
 
 LiquidCrystal_I2C lcd(LCD_I2C_ADDRESS, LCD_COLUMNS, LCD_ROWS);
 
 void lcdSetup() {
+	Wire.begin();
+	delay(20);  // give I2C expander a moment after power-up
 	lcd.init();
 	lcd.backlight();
 	lcd.clear();
+	lcd.setCursor(0, 0);
 }
 
 void clearScreen() {

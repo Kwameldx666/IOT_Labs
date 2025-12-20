@@ -234,7 +234,7 @@
 // ============================================================================
 // Lab 5.1 Configuration - Temperature Safety Controller
 // ============================================================================
-#define LAB51_TMP36_PIN A0              ///< Analog pin for TMP36 sensor
+#define LAB51_TMP36_PIN A0              ///< Analog pin for TMP36/LM35 sensor (wired to A0)
 #define LAB51_MOTOR_RELAY_PIN 13        ///< Relay to drive the fan/motor
 #define LAB51_ALARM_RELAY_PIN 7         ///< Relay for alarm lamp/siren
 #define LAB51_BUTTON_UP_PIN 3           ///< Increment setpoint button
@@ -254,20 +254,24 @@
 // ============================================================================
 // Lab 5.2 Configuration - PID Temperature Control (PWM)
 // ============================================================================
-#define LAB52_TMP36_PIN A0                ///< Analog pin for TMP36 sensor
+#define LAB52_TMP36_PIN A0                ///< Analog pin for TMP36/LM35 sensor (wired to A0)
 #define LAB52_PWM_PIN 9                   ///< PWM output pin driving nMOS/SSR
 #define LAB52_BUTTON_UP_PIN 3             ///< Increment setpoint button
 #define LAB52_BUTTON_DOWN_PIN 4           ///< Decrement setpoint button
 #define LAB52_LED_RED_PIN 10              ///< Red LED output
 #define LAB52_LED_GREEN_PIN 11            ///< Green LED output
 #define LAB52_LED_BLUE_PIN 12             ///< Blue LED output
+#define LAB5_RGB_ACTIVE_HIGH 1            ///< 0 = common anode (active LOW), 1 = common cathode (active HIGH)
+#define LAB5_USE_LM35 1                   ///< 1 = LM35 (no 0.5V offset), 0 = TMP36 (0.5V offset)
+#define LAB5_ADC_VREF 5.0f                ///< ADC reference voltage (5.0 for Mega 2560 default)
+#define LAB5_TEMP_OFFSET_C 0.0f           ///< Additional manual calibration offset in Celsius
 
 #define LAB52_START_SETPOINT_C 25.0f      ///< Default target temperature
 #define LAB52_STEP_SETPOINT_C 0.5f        ///< Button step size in Celsius
 #define LAB52_LED_BAND_C 1.0f             ///< +/- zone for LED color changes
 #define LAB52_BTN_DEBOUNCE_MS 100         ///< Button debounce interval
 #define LAB52_LCD_REFRESH_PERIOD_MS 200   ///< LCD refresh interval
-#define LAB52_TELEMETRY_PERIOD_MS 200     ///< StdIO/Plotter log period
+#define LAB52_TELEMETRY_PERIOD_MS 1000    ///< StdIO/Plotter log period (slower for readability)
 #define LAB52_LOOP_DELAY_MS 20            ///< Main loop delay to limit CPU load
 
 #define LAB52_PID_KP 10.0                 ///< Proportional gain
@@ -288,8 +292,8 @@
 // ============================================================================
 // Lab 6.2 Configuration - Traffic Light FSM (North/East)
 // ============================================================================
-#define LAB62_NORTH_PIN 20                ///< North direction button/input (Wokwi: SDA pin)
-#define LAB62_EAST_PIN 21                 ///< East direction button/input (Wokwi: SCL pin)
+#define LAB62_NORTH_PIN 22                ///< North direction button/input (Wokwi: SDA pin)
+#define LAB62_EAST_PIN 24               ///< East direction button/input (Wokwi: SCL pin)
 
 #define LAB62_EAST_RED_PIN 5
 #define LAB62_EAST_YELLOW_PIN 6
@@ -303,10 +307,7 @@
 #define LAB62_STATE_GO_E 2
 #define LAB62_STATE_WAIT_E 3
 
-#define LAB62_GO_N_OUTPUT 0b100001        ///< ER EY EG NR NY NG bits
-#define LAB62_WAIT_N_OUTPUT 0b010001
-#define LAB62_GO_E_OUTPUT 0b001100
-#define LAB62_WAIT_E_OUTPUT 0b001010
+
 
 #define LAB62_GO_N_TIME_MS 3000
 #define LAB62_WAIT_N_TIME_MS 500
